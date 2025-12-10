@@ -1,0 +1,20 @@
+# Include documentation and configuration files
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+include pyproject.toml
+
+# Include SLURM templates
+recursive-include exatune/hpc/templates *.sh
+
+# Include type hints marker
+include exatune/py.typed
+
+# Exclude development and build artifacts
+exclude .gitignore
+exclude .pre-commit-config.yaml
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude tests *
+recursive-exclude docs *

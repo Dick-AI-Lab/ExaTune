@@ -1,0 +1,60 @@
+experiment:
+  name: "xgboost_classification"
+  output_dir: "./results/xgboost_classification"
+  description: "XGBoost hyperparameter search for classification"
+  tags:
+    - "classification"
+    - "xgboost"
+    - "gradient-boosting"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "xgboost"
+  class: "XGBClassifier"
+  task: "classification"
+  fixed_params:
+    objective: "binary:logistic"
+    eval_metric: "logloss"
+    use_label_encoder: false
+
+hyperparameters:
+  n_estimators: [50, 100, 200, 300]
+  max_depth: [3, 4, 5, 6, 7, 8]
+  learning_rate: [0.01, 0.05, 0.1, 0.2, 0.3]
+  subsample: [0.6, 0.8, 1.0]
+  colsample_bytree: [0.6, 0.8, 1.0]
+  min_child_weight: [1, 3, 5, 7]
+  gamma: [0, 0.1, 0.2, 0.3]
+
+dataset:
+  name: "breast_cancer"
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "roc_auc"
+  additional_metrics:
+    - "accuracy"
+    - "f1"
+    - "precision"
+    - "recall"
+  n_jobs: -1
+
+slurm:
+  partition: "compute"
+  time: "01:00:00"
+  memory: "8G"
+  cpus_per_task: 4
+  nodes: 1
+  account: null
+  qos: null
+  email: null
+  email_type: "FAIL"
+  array_size: 100
+  additional_directives: {}
