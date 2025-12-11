@@ -22,12 +22,8 @@ class HyperparameterSpec(BaseModel):
     min: Optional[float] = Field(None, description="Minimum value for continuous range")
     max: Optional[float] = Field(None, description="Maximum value for continuous range")
     step: Optional[float] = Field(None, description="Step size for continuous range")
-    scale: Literal["linear", "log"] = Field(
-        "linear", description="Scale type: 'linear' or 'log'"
-    )
-    type: Literal["int", "float", "categorical"] = Field(
-        "float", description="Parameter type"
-    )
+    scale: Literal["linear", "log"] = Field("linear", description="Scale type: 'linear' or 'log'")
+    type: Literal["int", "float", "categorical"] = Field("float", description="Parameter type")
 
     @field_validator("values", "min", "max")
     @classmethod
@@ -38,9 +34,7 @@ class HyperparameterSpec(BaseModel):
     def model_post_init(self, __context: Any) -> None:
         """Validate that configuration is complete after initialization."""
         if self.values is None and (self.min is None or self.max is None):
-            raise ValueError(
-                "Either 'values' or both 'min' and 'max' must be specified"
-            )
+            raise ValueError("Either 'values' or both 'min' and 'max' must be specified")
         if self.values is not None and (self.min is not None or self.max is not None):
             raise ValueError("Cannot specify both 'values' and 'min/max'")
 
@@ -54,9 +48,7 @@ class ModelConfig(BaseModel):
     class_name: str = Field(
         ..., alias="class", description="Model class name (e.g., 'RandomForestClassifier')"
     )
-    task: Literal["classification", "regression"] = Field(
-        "classification", description="Task type"
-    )
+    task: Literal["classification", "regression"] = Field("classification", description="Task type")
     fixed_params: Dict[str, Any] = Field(
         default_factory=dict, description="Fixed hyperparameters not being tuned"
     )
@@ -76,9 +68,7 @@ class DatasetConfig(BaseModel):
         None, description="Target column name (for custom datasets)"
     )
     test_size: float = Field(0.2, ge=0.0, le=1.0, description="Test set proportion")
-    validation_size: float = Field(
-        0.0, ge=0.0, le=1.0, description="Validation set proportion"
-    )
+    validation_size: float = Field(0.0, ge=0.0, le=1.0, description="Validation set proportion")
     random_state: Optional[int] = Field(42, description="Random seed for reproducibility")
     stratify: bool = Field(True, description="Whether to stratify splits")
 
@@ -134,16 +124,12 @@ class ExperimentConfig(BaseModel):
     """Configuration for an ExaTune experiment."""
 
     name: str = Field(..., description="Experiment name")
-    output_dir: Path = Field(
-        Path("./results"), description="Directory for results and outputs"
-    )
+    output_dir: Path = Field(Path("./results"), description="Directory for results and outputs")
     description: Optional[str] = Field(None, description="Experiment description")
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     random_seed: Optional[int] = Field(42, description="Global random seed")
     save_models: bool = Field(False, description="Whether to save trained models")
-    checkpoint_interval: int = Field(
-        100, ge=1, description="Save checkpoint every N jobs"
-    )
+    checkpoint_interval: int = Field(100, ge=1, description="Save checkpoint every N jobs")
 
 
 class ExaTuneConfig(BaseModel):
@@ -233,14 +219,9 @@ class ExaTuneConfig(BaseModel):
                 specs[name] = value
             elif isinstance(value, list):
                 # Convert simple list to HyperparameterSpec
-                specs[name] = HyperparameterSpec(
-                    values=value,
-                    type=self._infer_type(value)
-                )
+                specs[name] = HyperparameterSpec(values=value, type=self._infer_type(value))
             else:
-                raise ValueError(
-                    f"Invalid hyperparameter specification for '{name}': {value}"
-                )
+                raise ValueError(f"Invalid hyperparameter specification for '{name}': {value}")
 
         return specs
 

@@ -101,18 +101,14 @@ class SklearnModelWrapper(BaseModelWrapper):
         if self.random_state is not None and "random_state" not in params:
             # Check if model class accepts random_state
             import inspect
+
             sig = inspect.signature(model_cls.__init__)
             if "random_state" in sig.parameters:
                 params["random_state"] = self.random_state
 
         return model_cls(**params)
 
-    def fit(
-        self,
-        X: NDArray[Any],
-        y: NDArray[Any],
-        **kwargs: Any
-    ) -> "SklearnModelWrapper":
+    def fit(self, X: NDArray[Any], y: NDArray[Any], **kwargs: Any) -> "SklearnModelWrapper":
         """
         Fit the sklearn model on training data.
 
@@ -173,9 +169,7 @@ class SklearnModelWrapper(BaseModelWrapper):
             )
 
         if not hasattr(self.model, "predict_proba"):
-            raise ValueError(
-                f"Model {self.model_class} does not support predict_proba"
-            )
+            raise ValueError(f"Model {self.model_class} does not support predict_proba")
 
         return self.model.predict_proba(X)
 

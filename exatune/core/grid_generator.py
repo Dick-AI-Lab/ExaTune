@@ -52,13 +52,9 @@ class GridGenerator:
             raise ValueError("Either values or min/max must be specified")
 
         if spec.scale == "linear":
-            values = self._generate_linear_range(
-                spec.min, spec.max, spec.step, spec.type
-            )
+            values = self._generate_linear_range(spec.min, spec.max, spec.step, spec.type)
         elif spec.scale == "log":
-            values = self._generate_log_range(
-                spec.min, spec.max, spec.step, spec.type
-            )
+            values = self._generate_log_range(spec.min, spec.max, spec.step, spec.type)
         else:
             raise ValueError(f"Unknown scale type: {spec.scale}")
 
@@ -66,10 +62,7 @@ class GridGenerator:
 
     @staticmethod
     def _generate_linear_range(
-        min_val: float,
-        max_val: float,
-        step: Optional[float],
-        param_type: str
+        min_val: float, max_val: float, step: Optional[float], param_type: str
     ) -> List[Any]:
         """
         Generate linearly-spaced values.
@@ -87,7 +80,7 @@ class GridGenerator:
             values = [min_val, max_val]
         else:
             # Use np.arange for consistent floating point handling
-            values = list(np.arange(min_val, max_val + step/2, step))
+            values = list(np.arange(min_val, max_val + step / 2, step))
 
         if param_type == "int":
             values = [int(v) for v in values]
@@ -96,10 +89,7 @@ class GridGenerator:
 
     @staticmethod
     def _generate_log_range(
-        min_val: float,
-        max_val: float,
-        step: Optional[float],
-        param_type: str
+        min_val: float, max_val: float, step: Optional[float], param_type: str
     ) -> List[Any]:
         """
         Generate logarithmically-spaced values.
@@ -155,18 +145,14 @@ class GridGenerator:
             return self._grid
 
         # Generate values for each parameter
-        param_values = {
-            name: self.generate_values(spec)
-            for name, spec in self.specs.items()
-        }
+        param_values = {name: self.generate_values(spec) for name, spec in self.specs.items()}
 
         # Generate all combinations
         param_names = list(param_values.keys())
         value_lists = [param_values[name] for name in param_names]
 
         self._grid = [
-            dict(zip(param_names, combination))
-            for combination in itertools.product(*value_lists)
+            dict(zip(param_names, combination)) for combination in itertools.product(*value_lists)
         ]
 
         return self._grid
@@ -179,10 +165,7 @@ class GridGenerator:
             Tuple of (index, configuration dictionary)
         """
         # Generate values for each parameter
-        param_values = {
-            name: self.generate_values(spec)
-            for name, spec in self.specs.items()
-        }
+        param_values = {name: self.generate_values(spec) for name, spec in self.specs.items()}
 
         param_names = list(param_values.keys())
         value_lists = [param_values[name] for name in param_names]
@@ -205,9 +188,7 @@ class GridGenerator:
         """
         grid = self.generate_grid()
         if index < 0 or index >= len(grid):
-            raise IndexError(
-                f"Index {index} out of bounds for grid of size {len(grid)}"
-            )
+            raise IndexError(f"Index {index} out of bounds for grid of size {len(grid)}")
         return grid[index]
 
     @staticmethod
@@ -266,14 +247,14 @@ class GridGenerator:
             print(f"  Type: {info['type']}")
             print(f"  Scale: {info['scale']}")
             print(f"  Number of values: {info['n_values']}")
-            if info['min'] is not None and info['max'] is not None:
+            if info["min"] is not None and info["max"] is not None:
                 print(f"  Range: {info['min']} to {info['max']}")
 
         print("=" * 60)
 
 
 def generate_hyperparameter_grid(
-    hyperparameter_specs: Dict[str, HyperparameterSpec]
+    hyperparameter_specs: Dict[str, HyperparameterSpec],
 ) -> List[Dict[str, Any]]:
     """
     Convenience function to generate a hyperparameter grid.

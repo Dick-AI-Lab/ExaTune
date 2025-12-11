@@ -153,8 +153,7 @@ class Experiment:
         n_jobs = 0
         with Progress() as progress:
             task = progress.add_task(
-                "[cyan]Creating jobs...",
-                total=self.grid_generator.estimate_grid_size()
+                "[cyan]Creating jobs...", total=self.grid_generator.estimate_grid_size()
             )
 
             for idx, config in self.grid_generator.generate_grid_iterator():
@@ -196,8 +195,7 @@ class Experiment:
             This method requires SLURM integration to be implemented.
         """
         console.print(
-            "[yellow]Job submission requires SLURM integration "
-            "(not yet implemented)[/yellow]"
+            "[yellow]Job submission requires SLURM integration " "(not yet implemented)[/yellow]"
         )
         return []
 
@@ -209,8 +207,7 @@ class Experiment:
             This method requires SLURM integration to be implemented.
         """
         console.print(
-            "[yellow]Job monitoring requires SLURM integration "
-            "(not yet implemented)[/yellow]"
+            "[yellow]Job monitoring requires SLURM integration " "(not yet implemented)[/yellow]"
         )
 
     def collect_results(self) -> pd.DataFrame:
@@ -284,8 +281,7 @@ class Experiment:
 
         # Extract hyperparameter columns
         hyperparam_cols = [
-            col for col in self.results.columns
-            if col in self.config.hyperparameters.keys()
+            col for col in self.results.columns if col in self.config.hyperparameters.keys()
         ]
 
         best_config = best_row[hyperparam_cols].to_dict()

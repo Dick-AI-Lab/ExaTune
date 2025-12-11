@@ -44,12 +44,7 @@ class SlurmClient:
             RuntimeError: If SLURM is not available
         """
         try:
-            subprocess.run(
-                ["sbatch", "--version"],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
+            subprocess.run(["sbatch", "--version"], capture_output=True, check=True, timeout=5)
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             raise RuntimeError(
                 "SLURM is not available. Ensure you are on a SLURM-enabled system "
@@ -135,6 +130,7 @@ class SlurmClient:
             Hash string
         """
         import hashlib
+
         config_str = json.dumps(hyperparameters, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()[:12]
 
@@ -154,7 +150,7 @@ class SlurmClient:
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=30
+                timeout=30,
             )
 
             # Parse job ID from output (typically: "Submitted batch job 12345")
@@ -173,10 +169,7 @@ class SlurmClient:
             return None
 
     def submit_job_array(
-        self,
-        job_script_path: Path,
-        array_size: int,
-        max_concurrent: Optional[int] = None
+        self, job_script_path: Path, array_size: int, max_concurrent: Optional[int] = None
     ) -> Optional[str]:
         """
         Submit a job array to SLURM.
@@ -199,7 +192,7 @@ class SlurmClient:
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=30
+                timeout=30,
             )
 
             match = re.search(r"Submitted batch job (\d+)", result.stdout)
@@ -232,7 +225,7 @@ class SlurmClient:
                 ["squeue", "-j", job_id, "-h", "-o", "%T"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
 
             status = result.stdout.strip()
@@ -261,7 +254,7 @@ class SlurmClient:
                 ["sacct", "-j", job_id, "-n", "-o", "State"],
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
 
             lines = result.stdout.strip().split("\n")
@@ -289,10 +282,7 @@ class SlurmClient:
         # Query squeue for all jobs at once
         try:
             result = subprocess.run(
-                ["squeue", "-h", "-o", "%i %T"],
-                capture_output=True,
-                text=True,
-                timeout=15
+                ["squeue", "-h", "-o", "%i %T"], capture_output=True, text=True, timeout=15
             )
 
             for line in result.stdout.strip().split("\n"):
@@ -327,12 +317,7 @@ class SlurmClient:
             True if cancellation succeeded
         """
         try:
-            subprocess.run(
-                ["scancel", job_id],
-                capture_output=True,
-                check=True,
-                timeout=10
-            )
+            subprocess.run(["scancel", job_id], capture_output=True, check=True, timeout=10)
             return True
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return False
@@ -365,10 +350,7 @@ class SlurmClient:
         """
         try:
             result = subprocess.run(
-                ["scontrol", "show", "job", job_id],
-                capture_output=True,
-                text=True,
-                timeout=10
+                ["scontrol", "show", "job", job_id], capture_output=True, text=True, timeout=10
             )
 
             # Parse scontrol output (key=value format)
@@ -393,12 +375,7 @@ class SlurmClient:
             True if SLURM commands are available
         """
         try:
-            subprocess.run(
-                ["sbatch", "--version"],
-                capture_output=True,
-                check=True,
-                timeout=5
-            )
+            subprocess.run(["sbatch", "--version"], capture_output=True, check=True, timeout=5)
             return True
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             return False

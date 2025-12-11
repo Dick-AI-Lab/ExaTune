@@ -29,11 +29,7 @@ def cli() -> None:
 
 @cli.command()
 @click.argument("config_path", type=click.Path(exists=True, path_type=Path))
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Generate jobs without submitting them"
-)
+@click.option("--dry-run", is_flag=True, help="Generate jobs without submitting them")
 def run(config_path: Path, dry_run: bool) -> None:
     """
     Run a hyperparameter search experiment.
@@ -74,7 +70,7 @@ def run(config_path: Path, dry_run: bool) -> None:
     "--output-dir",
     type=click.Path(path_type=Path),
     default=Path("./results"),
-    help="Experiment output directory"
+    help="Experiment output directory",
 )
 def status(experiment_name: str, output_dir: Path) -> None:
     """
@@ -106,7 +102,7 @@ def status(experiment_name: str, output_dir: Path) -> None:
     "--output-dir",
     type=click.Path(path_type=Path),
     default=Path("./results"),
-    help="Experiment output directory"
+    help="Experiment output directory",
 )
 def collect(experiment_name: str, output_dir: Path) -> None:
     """
@@ -143,33 +139,17 @@ def collect(experiment_name: str, output_dir: Path) -> None:
 
 @cli.command()
 @click.argument("experiment_name")
-@click.option(
-    "--params",
-    multiple=True,
-    help="Parameters to visualize (specify multiple times)"
-)
-@click.option(
-    "--metric",
-    default="accuracy",
-    help="Metric to visualize"
-)
+@click.option("--params", multiple=True, help="Parameters to visualize (specify multiple times)")
+@click.option("--metric", default="accuracy", help="Metric to visualize")
 @click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=Path("./results"),
-    help="Experiment output directory"
+    help="Experiment output directory",
 )
-@click.option(
-    "--output",
-    type=click.Path(path_type=Path),
-    help="Output file for visualization"
-)
+@click.option("--output", type=click.Path(path_type=Path), help="Output file for visualization")
 def visualize(
-    experiment_name: str,
-    params: tuple,
-    metric: str,
-    output_dir: Path,
-    output: Optional[Path]
+    experiment_name: str, params: tuple, metric: str, output_dir: Path, output: Optional[Path]
 ) -> None:
     """
     Generate visualizations for experiment results.
@@ -195,19 +175,15 @@ def visualize(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=Path("./results"),
-    help="Experiment output directory"
+    help="Experiment output directory",
 )
 @click.option(
     "--metrics",
     multiple=True,
     default=["smoothness", "multimodality"],
-    help="Landscape metrics to compute"
+    help="Landscape metrics to compute",
 )
-def analyze(
-    experiment_name: str,
-    output_dir: Path,
-    metrics: tuple
-) -> None:
+def analyze(experiment_name: str, output_dir: Path, metrics: tuple) -> None:
     """
     Analyze hyperparameter landscape characteristics.
 

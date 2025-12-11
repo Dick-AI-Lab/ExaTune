@@ -54,12 +54,7 @@ class BaseModelWrapper(ABC):
         pass
 
     @abstractmethod
-    def fit(
-        self,
-        X: NDArray[Any],
-        y: NDArray[Any],
-        **kwargs: Any
-    ) -> "BaseModelWrapper":
+    def fit(self, X: NDArray[Any], y: NDArray[Any], **kwargs: Any) -> "BaseModelWrapper":
         """
         Fit the model on training data.
 
@@ -102,12 +97,7 @@ class BaseModelWrapper(ABC):
         """
         pass
 
-    def score(
-        self,
-        X: NDArray[Any],
-        y: NDArray[Any],
-        metric: str = "default"
-    ) -> float:
+    def score(self, X: NDArray[Any], y: NDArray[Any], metric: str = "default") -> float:
         """
         Calculate a performance metric on the given data.
 

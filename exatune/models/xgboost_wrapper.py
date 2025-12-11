@@ -50,9 +50,7 @@ class XGBoostModelWrapper(BaseModelWrapper):
         try:
             import xgboost as xgb
         except ImportError:
-            raise ImportError(
-                "xgboost is not installed. Install it with: pip install xgboost"
-            )
+            raise ImportError("xgboost is not installed. Install it with: pip install xgboost")
 
         # Map model class name to XGBoost class
         model_map = {
@@ -93,7 +91,7 @@ class XGBoostModelWrapper(BaseModelWrapper):
         eval_set: Optional[list] = None,
         early_stopping_rounds: Optional[int] = None,
         verbose: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> "XGBoostModelWrapper":
         """
         Fit the XGBoost model on training data.
