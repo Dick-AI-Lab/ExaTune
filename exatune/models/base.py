@@ -6,10 +6,9 @@ This module defines the abstract base class that all model wrappers must impleme
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 import joblib
-import numpy as np
 from numpy.typing import NDArray
 
 

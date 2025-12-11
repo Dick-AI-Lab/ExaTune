@@ -195,7 +195,10 @@ class Experiment:
         Note:
             This method requires SLURM integration to be implemented.
         """
-        console.print("[yellow]Job submission requires SLURM integration (not yet implemented)[/yellow]")
+        console.print(
+            "[yellow]Job submission requires SLURM integration "
+            "(not yet implemented)[/yellow]"
+        )
         return []
 
     def monitor_progress(self) -> None:
@@ -205,7 +208,10 @@ class Experiment:
         Note:
             This method requires SLURM integration to be implemented.
         """
-        console.print("[yellow]Job monitoring requires SLURM integration (not yet implemented)[/yellow]")
+        console.print(
+            "[yellow]Job monitoring requires SLURM integration "
+            "(not yet implemented)[/yellow]"
+        )
 
     def collect_results(self) -> pd.DataFrame:
         """

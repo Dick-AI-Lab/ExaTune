@@ -47,7 +47,7 @@ def run(config_path: Path, dry_run: bool) -> None:
         experiment.print_summary()
 
         # Generate job scripts
-        n_jobs = experiment.generate_jobs()
+        experiment.generate_jobs()
 
         if dry_run:
             console.print("\n[yellow]Dry run mode: Jobs generated but not submitted[/yellow]")
@@ -241,7 +241,7 @@ def validate(config_path: Path) -> None:
         experiment.print_summary()
 
     except Exception as e:
-        console.print(f"[red]✗ Configuration is invalid[/red]")
+        console.print("[red]✗ Configuration is invalid[/red]")
         console.print(f"[red]Error: {e}[/red]")
         raise click.Abort()
 

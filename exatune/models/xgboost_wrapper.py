@@ -6,7 +6,6 @@ This module provides a wrapper for XGBoost models.
 
 from typing import Any, Dict, Optional
 
-import numpy as np
 from numpy.typing import NDArray
 
 from exatune.models.base import BaseModelWrapper
