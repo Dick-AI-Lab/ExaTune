@@ -7,7 +7,7 @@ of hyperparameters from configuration specifications.
 
 import hashlib
 import itertools
-from typing import Any, Dict, Iterator, List, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 
