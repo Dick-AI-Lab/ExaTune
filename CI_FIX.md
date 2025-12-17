@@ -301,9 +301,54 @@ All fixes verified. No functional changes.
 22 total fixes applied.
 ```
 
+---
+
+## Batch 4: Bug Fix - None Value Handling (FIXED)
+
+### Issue
+Grid generator crashed when hyperparameters contained `None`/`null` values:
+
+```
+TypeError: '<' not supported between instances of 'NoneType' and 'int'
+```
+
+### Root Cause
+The `get_summary()` method called `min(values)` and `max(values)` without filtering out `None` values first.
+
+### Solution
+**File:** `exatune/core/grid_generator.py:219-220`
+
+Added filtering before min/max calculation:
+```python
+# Filter out None values for min/max calculation
+numeric_values = [v for v in values if v is not None]
+param_summaries[name] = {
+    "min": min(numeric_values) if numeric_values else None,
+    "max": max(numeric_values) if numeric_values else None,
+    ...
+}
+```
+
+### Verification
+Created `test_exatune_toy.py` - comprehensive test suite:
+- ✅ 7/7 tests passed (100%)
+- Tests configuration, grid generation, models, storage, CLI
+
+---
+
+## Complete Summary (Final)
+
+**Total Issues Resolved: 23 fixes**
+- Batch 1: 3 missing imports
+- Batch 2: 11 linting errors
+- Batch 3: 8 formatting fixes
+- Batch 4: 1 bug fix
+
 ## Next Steps
 
 1. ✅ All fixes applied
 2. ✅ All formatting corrected
-3. ✅ Ready to commit
-4. 🎯 CI pipeline should now pass completely
+3. ✅ Bug fixes implemented
+4. ✅ Test suite: 7/7 passing
+5. ✅ Ready to commit
+6. 🎯 CI pipeline should pass completely

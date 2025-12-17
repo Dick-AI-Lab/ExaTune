@@ -216,10 +216,12 @@ class GridGenerator:
         param_summaries = {}
         for name, spec in self.specs.items():
             values = self.generate_values(spec)
+            # Filter out None values for min/max calculation
+            numeric_values = [v for v in values if v is not None]
             param_summaries[name] = {
                 "n_values": len(values),
-                "min": min(values) if values else None,
-                "max": max(values) if values else None,
+                "min": min(numeric_values) if numeric_values else None,
+                "max": max(numeric_values) if numeric_values else None,
                 "type": spec.type,
                 "scale": spec.scale,
             }
