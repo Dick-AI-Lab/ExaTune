@@ -67,6 +67,7 @@ viz = [
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
+    "pytest-mock>=3.12.0",
     "pytest-xdist>=2.5.0",
     "black>=22.0.0",
     "isort>=5.10.0",
@@ -154,6 +155,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
+    "unit: marks tests as unit tests (default)",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "hpc: marks tests that require HPC/SLURM environment",

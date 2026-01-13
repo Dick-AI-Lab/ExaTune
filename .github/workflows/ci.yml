@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
     - uses: actions/checkout@v3
@@ -51,12 +51,18 @@ jobs:
 
     - name: Type check with mypy
       run: |
-        mypy exatune --ignore-missing-imports
-      continue-on-error: true  # Don't fail on type errors initially
+        mypy exatune --ignore-missing-imports --allow-untyped-defs --allow-incomplete-defs
+      continue-on-error: false  # Enforce type checking
 
-    - name: Run tests with pytest
+    - name: Run unit tests with pytest
       run: |
-        pytest tests/ -v --cov=exatune --cov-report=xml --cov-report=term-missing
+        pytest tests/ -v -m "not integration and not hpc" --cov=exatune --cov-report=xml --cov-report=term-missing
+      continue-on-error: false
+
+    - name: Run integration tests
+      run: |
+        pytest tests/ -v -m "integration" --cov=exatune --cov-append --cov-report=xml
+      continue-on-error: false
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -65,6 +71,10 @@ jobs:
         flags: unittests
         name: codecov-${{ matrix.os }}-py${{ matrix.python-version }}
         fail_ci_if_error: false
+
+    - name: Check coverage threshold
+      run: |
+        python -m coverage report --fail-under=70
 
   docs:
     runs-on: ubuntu-latest
