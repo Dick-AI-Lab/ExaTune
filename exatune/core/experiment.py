@@ -180,9 +180,35 @@ class Experiment:
         Returns:
             Job script content
         """
-        # This will be implemented with the SLURM integration
-        # For now, return a placeholder
-        return f"#!/bin/bash\n# Job {job_id}\n# Hyperparameters: {hyperparameters}\n"
+        from exatune.hpc.slurm_client import SlurmClient
+        import exatune.hpc
+
+        # Get path to worker script
+        worker_path = Path(exatune.hpc.__file__).parent / "worker.py"
+
+        # Initialize SLURM client
+        slurm_client = SlurmClient(self.config.slurm, self.output_dir)
+
+        # Get random seed for this job
+        random_seed = None
+        if self.config.experiment.random_seed is not None:
+            random_seed = self.config.experiment.random_seed + job_id
+
+        # Get Python environment setup commands
+        python_env = getattr(self.config.slurm, "python_environment", None)
+
+        # Generate job script
+        return slurm_client.generate_job_script(
+            job_id=job_id,
+            job_name=f"{self.config.experiment.name}_j{job_id:06d}",
+            hyperparameters=hyperparameters,
+            config_path=self.output_dir / "config.yaml",
+            script_path=worker_path,
+            output_dir=self.results_dir,
+            log_dir=self.logs_dir,
+            random_seed=random_seed,
+            python_env=python_env,
+        )
 
     def submit_jobs(self) -> List[str]:
         """
@@ -192,23 +218,224 @@ class Experiment:
             List of SLURM job IDs
 
         Note:
-            This method requires SLURM integration to be implemented.
+            This method requires SLURM to be available on the system.
         """
+        from exatune.hpc.slurm_client import SlurmClient
+
+        # Check if SLURM is available
+        if not SlurmClient.is_slurm_available():
+            console.print(
+                "[red]SLURM is not available on this system.[/red]\n"
+                "[yellow]Please run this on a SLURM-enabled HPC cluster.[/yellow]"
+            )
+            return []
+
+        slurm_client = SlurmClient(self.config.slurm, self.output_dir)
+        grid_size = self.grid_generator.estimate_grid_size()
+
+        # Strategy: Use job arrays for grids > 50 jobs
+        if grid_size > 50:
+            console.print(f"[cyan]Using job array for {grid_size} configurations[/cyan]")
+            return self._submit_job_array(slurm_client, grid_size)
+        else:
+            console.print(f"[cyan]Submitting {grid_size} individual jobs[/cyan]")
+            return self._submit_individual_jobs(slurm_client, grid_size)
+
+    def _submit_individual_jobs(self, slurm_client, grid_size: int) -> List[str]:
+        """
+        Submit jobs individually.
+
+        Args:
+            slurm_client: SLURM client instance
+            grid_size: Number of jobs to submit
+
+        Returns:
+            List of SLURM job IDs
+        """
+        job_ids = []
+
+        with Progress() as progress:
+            task = progress.add_task("[cyan]Submitting jobs...", total=grid_size)
+
+            for idx in range(grid_size):
+                job_script_path = self.jobs_dir / f"job_{idx:06d}.sh"
+
+                if not job_script_path.exists():
+                    console.print(
+                        f"[yellow]Warning: Job script not found: {job_script_path}[/yellow]"
+                    )
+                    progress.update(task, advance=1)
+                    continue
+
+                job_id = slurm_client.submit_job(job_script_path)
+
+                if job_id:
+                    job_ids.append(job_id)
+                    self._job_ids.append(job_id)
+                else:
+                    console.print(f"[yellow]Warning: Failed to submit job {idx}[/yellow]")
+
+                progress.update(task, advance=1)
+
+        if job_ids:
+            self.save_checkpoint("after_submission")
+            console.print(f"[green]Successfully submitted {len(job_ids)} jobs[/green]")
+
+        return job_ids
+
+    def _submit_job_array(self, slurm_client, array_size: int) -> List[str]:
+        """
+        Submit jobs as a SLURM job array.
+
+        Args:
+            slurm_client: SLURM client instance
+            array_size: Size of job array
+
+        Returns:
+            List with single job array ID
+        """
+        # For job arrays, we need a master script that uses SLURM_ARRAY_TASK_ID
+        # For now, fall back to individual job submission
+        # TODO: Implement proper job array support in future version
         console.print(
-            "[yellow]Job submission requires SLURM integration " "(not yet implemented)[/yellow]"
+            "[yellow]Job arrays not yet fully implemented, using individual submission[/yellow]"
         )
-        return []
+        return self._submit_individual_jobs(slurm_client, array_size)
 
     def monitor_progress(self) -> None:
         """
         Monitor the progress of submitted jobs.
 
         Note:
-            This method requires SLURM integration to be implemented.
+            This method requires SLURM to be available on the system.
         """
-        console.print(
-            "[yellow]Job monitoring requires SLURM integration " "(not yet implemented)[/yellow]"
-        )
+        from exatune.hpc.slurm_client import SlurmClient
+        from rich.live import Live
+
+        # Load job IDs from checkpoint if not in memory
+        if not self._job_ids:
+            try:
+                self.load_checkpoint("after_submission")
+            except FileNotFoundError:
+                console.print(
+                    "[yellow]No checkpoint found. Make sure jobs have been submitted.[/yellow]"
+                )
+                return
+
+        if not self._job_ids:
+            console.print("[yellow]No jobs to monitor[/yellow]")
+            return
+
+        # Check if SLURM is available
+        if not SlurmClient.is_slurm_available():
+            console.print(
+                "[red]SLURM is not available on this system.[/red]\n"
+                "[yellow]Cannot monitor job status.[/yellow]"
+            )
+            return
+
+        slurm_client = SlurmClient(self.config.slurm, self.output_dir)
+
+        console.print(f"\n[bold]Monitoring {len(self._job_ids)} jobs...[/bold]")
+        console.print("[dim]Press Ctrl+C to stop monitoring[/dim]\n")
+
+        def generate_status_table(status_counts: Dict[str, int]) -> Table:
+            """Generate a Rich table showing job status."""
+            table = Table(title="Job Status", show_header=True, header_style="bold cyan")
+            table.add_column("Status", style="cyan", width=15)
+            table.add_column("Count", justify="right", style="white")
+            table.add_column("Percentage", justify="right", style="white")
+
+            total = sum(status_counts.values())
+
+            for status in ["PENDING", "RUNNING", "COMPLETED", "FAILED", "CANCELLED", "UNKNOWN"]:
+                count = status_counts.get(status, 0)
+                percentage = (count / total * 100) if total > 0 else 0
+
+                # Color based on status
+                if status == "COMPLETED":
+                    style = "green"
+                elif status == "FAILED" or status == "CANCELLED":
+                    style = "red"
+                elif status == "RUNNING":
+                    style = "yellow"
+                else:
+                    style = "white"
+
+                table.add_row(status, str(count), f"{percentage:.1f}%", style=style)
+
+            table.add_row("─" * 15, "─" * 5, "─" * 10, style="dim")
+            table.add_row("TOTAL", str(total), "100.0%", style="bold")
+
+            return table
+
+        try:
+            # Monitor with live updating display
+            all_complete = False
+            status_counts = {}
+
+            while not all_complete:
+                # Query job status
+                status_dict = slurm_client.get_multiple_job_status(self._job_ids)
+
+                # Count by status
+                status_counts = {
+                    "PENDING": 0,
+                    "RUNNING": 0,
+                    "COMPLETED": 0,
+                    "FAILED": 0,
+                    "CANCELLED": 0,
+                    "UNKNOWN": 0,
+                }
+
+                for job_id in self._job_ids:
+                    status = status_dict.get(job_id, "UNKNOWN")
+                    # Normalize status names
+                    if "COMPLET" in status:
+                        status = "COMPLETED"
+                    elif "FAIL" in status:
+                        status = "FAILED"
+                    elif "CANCEL" in status:
+                        status = "CANCELLED"
+                    elif "RUN" in status:
+                        status = "RUNNING"
+                    elif "PEND" in status:
+                        status = "PENDING"
+                    else:
+                        status = "UNKNOWN"
+
+                    status_counts[status] = status_counts.get(status, 0) + 1
+
+                # Display table
+                console.print(generate_status_table(status_counts))
+
+                # Check if all jobs are complete
+                terminal_states = ["COMPLETED", "FAILED", "CANCELLED"]
+                all_complete = all(
+                    status_dict.get(job_id, "UNKNOWN") in terminal_states
+                    or "COMPLET" in status_dict.get(job_id, "")
+                    or "FAIL" in status_dict.get(job_id, "")
+                    or "CANCEL" in status_dict.get(job_id, "")
+                    for job_id in self._job_ids
+                )
+
+                if not all_complete:
+                    # Wait before next poll
+                    time.sleep(30)
+                    # Clear previous output
+                    console.clear()
+                else:
+                    break
+
+            # Final summary
+            console.print("\n[bold]Job Monitoring Complete[/bold]")
+            console.print(f"[green]Completed: {status_counts['COMPLETED']}[/green]")
+            console.print(f"[red]Failed: {status_counts['FAILED']}[/red]")
+            console.print(f"[yellow]Cancelled: {status_counts['CANCELLED']}[/yellow]")
+
+        except KeyboardInterrupt:
+            console.print("\n\n[yellow]Monitoring interrupted by user[/yellow]")
+            console.print("Jobs will continue running in the background.")
 
     def collect_results(self) -> pd.DataFrame:
         """
@@ -216,12 +443,128 @@ class Experiment:
 
         Returns:
             DataFrame with all results
-
-        Note:
-            This method requires result collection implementation.
         """
-        console.print("[yellow]Result collection not yet implemented[/yellow]")
-        return pd.DataFrame()
+        console.print("[bold]Collecting results...[/bold]")
+
+        # Scan for result files
+        results_list = self._collect_json_results()
+
+        if not results_list:
+            console.print("[yellow]No results found[/yellow]")
+            console.print(f"[dim]Searched in: {self.results_dir}[/dim]")
+            return pd.DataFrame()
+
+        # Convert to DataFrame
+        df = pd.DataFrame(results_list)
+
+        # Validate and enrich
+        df = self._validate_and_enrich_results(df)
+
+        # Store in instance
+        self.results = df
+
+        # Report statistics
+        total = len(df)
+        successful = df["success"].sum()
+        failed = total - successful
+
+        console.print(f"\n[green]Collected {total} results[/green]")
+        console.print(f"[green]Successful: {successful} ({successful/total*100:.1f}%)[/green]")
+        if failed > 0:
+            console.print(f"[red]Failed: {failed} ({failed/total*100:.1f}%)[/red]")
+
+        return df
+
+    def _collect_json_results(self) -> List[Dict[str, Any]]:
+        """
+        Collect results from JSON files.
+
+        Returns:
+            List of result dictionaries
+        """
+        results_list = []
+
+        # Find all result JSON files
+        result_files = sorted(self.results_dir.glob("result_*.json"))
+
+        if not result_files:
+            return results_list
+
+        with Progress() as progress:
+            task = progress.add_task(
+                "[cyan]Loading results...", total=len(result_files)
+            )
+
+            for result_file in result_files:
+                try:
+                    with open(result_file, "r") as f:
+                        result = json.load(f)
+                        results_list.append(result)
+                except Exception as e:
+                    console.print(
+                        f"[yellow]Warning: Failed to load {result_file.name}: {e}[/yellow]"
+                    )
+
+                progress.update(task, advance=1)
+
+        return results_list
+
+    def _validate_and_enrich_results(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Validate and enrich results DataFrame.
+
+        Args:
+            df: Raw results DataFrame
+
+        Returns:
+            Enriched DataFrame
+        """
+        # Check for missing jobs
+        expected_jobs = self.grid_generator.estimate_grid_size()
+        actual_jobs = len(df)
+
+        if actual_jobs < expected_jobs:
+            missing = expected_jobs - actual_jobs
+            console.print(
+                f"[yellow]Warning: {missing} jobs missing "
+                f"({missing/expected_jobs*100:.1f}%)[/yellow]"
+            )
+
+        # Sort by mean score (descending for successful jobs)
+        if "mean_score" in df.columns:
+            # Put successful jobs first, sorted by score
+            df["sort_key"] = df.apply(
+                lambda row: (
+                    -row["mean_score"] if row["success"] and row["mean_score"] is not None
+                    else float("inf")
+                ),
+                axis=1
+            )
+            df = df.sort_values("sort_key").drop(columns=["sort_key"])
+
+        # Add best_score flag
+        if "mean_score" in df.columns and df["success"].any():
+            successful_df = df[df["success"]]
+            if not successful_df.empty:
+                best_score = successful_df["mean_score"].max()
+                df["best_score"] = (df["mean_score"] == best_score) & df["success"]
+            else:
+                df["best_score"] = False
+        else:
+            df["best_score"] = False
+
+        # Add rank column (for successful jobs only)
+        if "mean_score" in df.columns:
+            df["rank"] = None
+            successful_mask = df["success"]
+            if successful_mask.any():
+                df.loc[successful_mask, "rank"] = (
+                    df[successful_mask]["mean_score"]
+                    .rank(ascending=False, method="min")
+                    .astype(int)
+                )
+
+        return df
 
     def load_results(self) -> Optional[pd.DataFrame]:
         """
