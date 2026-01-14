@@ -1,0 +1,84 @@
+# ExaTune Configuration: California Housing Regression Benchmark
+# Dataset: California Housing (20640 samples, 8 features, continuous target)
+# Task: Regression (median house value prediction)
+# Model: XGBoost Regressor
+
+experiment:
+  name: "california_housing_xgb"
+  output_dir: "./results/benchmarks/california_housing_xgb"
+  description: "XGBoost hyperparameter landscape for California housing price prediction"
+  tags:
+    - "benchmark"
+    - "regression"
+    - "housing"
+    - "xgboost"
+    - "large-dataset"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 200
+
+model:
+  type: "xgboost"
+  task: "regression"
+  fixed_params:
+    objective: "reg:squarederror"
+    eval_metric: "rmse"
+    random_state: 42
+    tree_method: "hist"  # Faster for large datasets
+
+hyperparameters:
+  n_estimators:
+    type: "discrete"
+    values: [100, 200, 300, 500, 700, 1000]
+  learning_rate:
+    type: "discrete"
+    values: [0.001, 0.01, 0.05, 0.1, 0.2]
+  max_depth:
+    type: "discrete"
+    values: [3, 4, 5, 6, 7, 8]
+  min_child_weight:
+    type: "discrete"
+    values: [1, 3, 5, 7, 10]
+  subsample:
+    type: "discrete"
+    values: [0.6, 0.7, 0.8, 0.9, 1.0]
+  colsample_bytree:
+    type: "discrete"
+    values: [0.6, 0.7, 0.8, 0.9, 1.0]
+  gamma:
+    type: "discrete"
+    values: [0, 0.1, 0.5, 1.0, 2.0]
+  reg_alpha:
+    type: "discrete"
+    values: [0, 0.01, 0.1, 1.0]
+  reg_lambda:
+    type: "discrete"
+    values: [0.1, 1.0, 5.0, 10.0]
+
+dataset:
+  name: "california_housing"
+  test_size: 0.2
+  random_state: 42
+  stratify: false
+
+evaluation:
+  cv_folds: 3  # Fewer folds for large dataset
+  cv_strategy: "kfold"
+  scoring: "neg_root_mean_squared_error"
+  additional_metrics:
+    - "r2"
+    - "neg_mean_squared_error"
+    - "neg_mean_absolute_error"
+  n_jobs: 1
+
+slurm:
+  partition: "compute"
+  time: "04:00:00"  # Longer time for large dataset
+  memory: "16G"  # More memory for large dataset
+  cpus_per_task: 4
+  nodes: 1
+  email_type: "FAIL"
+
+storage:
+  backend: "parquet"
+  compress: true

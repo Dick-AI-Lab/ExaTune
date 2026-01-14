@@ -1,0 +1,74 @@
+# ExaTune Configuration: Diabetes Regression Benchmark
+# Dataset: Diabetes (442 samples, 10 features, continuous target)
+# Task: Regression
+# Model: Random Forest Regressor
+
+experiment:
+  name: "diabetes_rf_regression"
+  output_dir: "./results/benchmarks/diabetes_rf"
+  description: "Random Forest hyperparameter landscape for diabetes progression prediction"
+  tags:
+    - "benchmark"
+    - "regression"
+    - "diabetes"
+    - "sklearn"
+    - "medical"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"
+  class_name: "sklearn.ensemble.RandomForestRegressor"
+  task: "regression"
+  fixed_params:
+    random_state: 42
+
+hyperparameters:
+  n_estimators:
+    type: "discrete"
+    values: [10, 50, 100, 200, 300, 500]
+  max_depth:
+    type: "discrete"
+    values: [3, 5, 7, 10, 15, 20, null]
+  min_samples_split:
+    type: "discrete"
+    values: [2, 5, 10, 20, 30]
+  min_samples_leaf:
+    type: "discrete"
+    values: [1, 2, 4, 8, 16]
+  max_features:
+    type: "discrete"
+    values: ["sqrt", "log2", 0.5, 0.8, 1.0]
+  bootstrap:
+    type: "discrete"
+    values: [true, false]
+
+dataset:
+  name: "diabetes"
+  test_size: 0.2
+  random_state: 42
+  stratify: false  # No stratification for regression
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "kfold"
+  scoring: "r2"
+  additional_metrics:
+    - "neg_mean_squared_error"
+    - "neg_mean_absolute_error"
+    - "neg_root_mean_squared_error"
+    - "explained_variance"
+  n_jobs: 1
+
+slurm:
+  partition: "compute"
+  time: "01:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+
+storage:
+  backend: "parquet"
+  compress: true

@@ -1,0 +1,78 @@
+# ExaTune Configuration: Iris Classification Benchmark
+# Dataset: Iris (150 samples, 4 features, 3 classes)
+# Task: Multi-class classification
+# Model: Random Forest Classifier
+
+experiment:
+  name: "iris_rf_benchmark"
+  output_dir: "./results/benchmarks/iris_rf"
+  description: "Random Forest hyperparameter landscape on Iris dataset"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "iris"
+    - "sklearn"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "sklearn"
+  class_name: "sklearn.ensemble.RandomForestClassifier"
+  task: "classification"
+  fixed_params:
+    criterion: "gini"
+    bootstrap: true
+    random_state: 42
+
+hyperparameters:
+  n_estimators:
+    type: "discrete"
+    values: [10, 25, 50, 100, 200, 300]
+  max_depth:
+    type: "discrete"
+    values: [2, 3, 5, 7, 10, 15, 20, null]
+  min_samples_split:
+    type: "discrete"
+    values: [2, 5, 10, 20, 30]
+  min_samples_leaf:
+    type: "discrete"
+    values: [1, 2, 4, 8, 16]
+  max_features:
+    type: "discrete"
+    values: ["sqrt", "log2", 0.5, 0.8, null]
+
+dataset:
+  name: "iris"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+    - "roc_auc_ovr"
+  n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
+
+slurm:
+  partition: "compute"
+  time: "00:30:00"
+  memory: "4G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  modules:
+    - "python/3.9"
+    - "scipy-stack"
+
+storage:
+  backend: "parquet"
+  compress: true

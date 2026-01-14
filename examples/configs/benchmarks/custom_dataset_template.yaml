@@ -1,0 +1,95 @@
+# ExaTune Configuration: Custom Dataset Template
+# This template shows how to use your own CSV/Parquet dataset with ExaTune
+#
+# Dataset Requirements:
+# - CSV or Parquet format
+# - Features: numeric columns
+# - Target: single column (specified by target_column parameter)
+# - For classification: target should be categorical/integer labels
+# - For regression: target should be continuous numeric values
+
+experiment:
+  name: "custom_dataset_example"
+  output_dir: "./results/custom_dataset"
+  description: "Hyperparameter search on custom dataset"
+  tags:
+    - "custom"
+    - "your-dataset-name"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"  # or "xgboost"
+  class_name: "sklearn.ensemble.RandomForestClassifier"  # Change based on task
+  task: "classification"  # or "regression"
+  fixed_params:
+    random_state: 42
+
+hyperparameters:
+  # Random Forest hyperparameters
+  n_estimators:
+    type: "discrete"
+    values: [50, 100, 200, 300]
+  max_depth:
+    type: "discrete"
+    values: [5, 10, 15, 20, null]
+  min_samples_split:
+    type: "discrete"
+    values: [2, 5, 10]
+  min_samples_leaf:
+    type: "discrete"
+    values: [1, 2, 4]
+
+dataset:
+  # Path to your dataset file
+  path: "/path/to/your/dataset.csv"  # CHANGE THIS
+
+  # Name of the target column in your dataset
+  target_column: "target"  # CHANGE THIS
+
+  # Column names to use as features (optional - if not specified, all columns except target are used)
+  # feature_columns:
+  #   - "feature1"
+  #   - "feature2"
+  #   - "feature3"
+
+  # Train/test split
+  test_size: 0.2
+  random_state: 42
+
+  # For classification: stratify by target
+  # For regression: set to false
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+
+  # For classification with imbalanced classes: use "stratified"
+  # For regression: use "kfold"
+  cv_strategy: "stratified"
+
+  # Primary metric
+  # Classification: "accuracy", "f1_macro", "f1_weighted", "roc_auc", etc.
+  # Regression: "r2", "neg_mean_squared_error", "neg_root_mean_squared_error", etc.
+  scoring: "accuracy"
+
+  # Additional metrics to compute
+  additional_metrics:
+    - "f1_weighted"
+    - "precision_weighted"
+    - "recall_weighted"
+
+  n_jobs: 1
+
+slurm:
+  partition: "compute"
+  time: "01:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+
+storage:
+  backend: "parquet"
+  compress: true

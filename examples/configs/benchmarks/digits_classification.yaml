@@ -1,0 +1,71 @@
+# ExaTune Configuration: Digits Classification Benchmark
+# Dataset: Digits (1797 samples, 64 features, 10 classes)
+# Task: Multi-class classification (handwritten digits)
+# Model: Support Vector Machine
+
+experiment:
+  name: "digits_svm_benchmark"
+  output_dir: "./results/benchmarks/digits_svm"
+  description: "SVM hyperparameter landscape on handwritten digits"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "digits"
+    - "sklearn"
+    - "svm"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"
+  class_name: "sklearn.svm.SVC"
+  task: "classification"
+  fixed_params:
+    random_state: 42
+    probability: true  # For ROC AUC computation
+
+hyperparameters:
+  C:
+    type: "discrete"
+    values: [0.01, 0.1, 1.0, 10.0, 100.0]
+  kernel:
+    type: "discrete"
+    values: ["linear", "rbf", "poly", "sigmoid"]
+  gamma:
+    type: "discrete"
+    values: ["scale", "auto", 0.001, 0.01, 0.1, 1.0]
+  degree:
+    type: "discrete"
+    values: [2, 3, 4, 5]  # Only for poly kernel
+
+dataset:
+  name: "digits"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+    - "roc_auc_ovr"
+  n_jobs: 1
+
+slurm:
+  partition: "compute"
+  time: "01:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+
+storage:
+  backend: "parquet"
+  compress: true
