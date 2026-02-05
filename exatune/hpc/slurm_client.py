@@ -91,6 +91,10 @@ class SlurmClient:
         # Serialize hyperparameters to JSON
         hyperparameters_json = json.dumps(hyperparameters)
 
+        # Build python_env from config if not explicitly provided
+        if python_env is None and self.config.python_environment:
+            python_env = self.config.python_environment
+
         # Render template
         script_content = template.render(
             job_id=job_id,
@@ -105,6 +109,7 @@ class SlurmClient:
             email=self.config.email,
             email_type=self.config.email_type,
             additional_directives=self.config.additional_directives,
+            modules=self.config.modules,
             config_hash=config_hash,
             hyperparameters_json=hyperparameters_json,
             config_path=config_path,

@@ -274,6 +274,151 @@ If you encounter issues:
 4. Try clean install: Delete venv, recreate, reinstall
 5. Check GitHub issues: [Report a bug](https://github.com/BORN-Ontario/exatune/issues)
 
+## Installation on Compute Canada / Digital Research Alliance of Canada
+
+Compute Canada clusters (Cedar, Graham, Narval, Beluga, Niagara) use a custom
+wheel system that intercepts packages like `numpy`, `scipy`, `pyarrow`,
+`matplotlib`, and `scikit-learn` with dummy wheels. These packages must be loaded
+as **environment modules** before creating your virtual environment.
+
+### Step 1: Load Required Modules
+
+```bash
+# Load the compiler, Python, and scientific stack
+module load gcc/11.3.0 python/3.10 scipy-stack/2023b arrow/14.0.1
+
+# Verify modules are loaded
+module list
+```
+
+> **Important:** The exact module versions available depend on your cluster.
+> Use `module spider python` and `module spider arrow` to find available versions.
+
+The `scipy-stack` module provides: `numpy`, `scipy`, `pandas`, `scikit-learn`,
+`matplotlib`, `joblib`, and more. The `arrow` module provides `pyarrow`.
+
+### Step 2: Create Virtual Environment with System Site Packages
+
+```bash
+# --system-site-packages lets the venv see module-provided packages
+python -m venv --system-site-packages ~/exatune_env
+```
+
+### Step 3: Activate and Install
+
+```bash
+source ~/exatune_env/bin/activate
+
+# Upgrade pip
+pip install --upgrade pip
+
+# Install ExaTune, skipping packages already provided by modules
+pip install -e . --no-build-isolation
+```
+
+If pip still tries to install a module-provided package and fails, install
+without the problematic dependency and add it manually:
+
+```bash
+pip install -e . --no-deps
+pip install pydantic pyyaml jinja2 click rich tqdm xgboost
+```
+
+### Step 4: Verify Installation
+
+```bash
+python -c "
+import pyarrow; print(f'PyArrow {pyarrow.__version__}')
+import sklearn; print(f'scikit-learn {sklearn.__version__}')
+import numpy; print(f'NumPy {numpy.__version__}')
+import exatune; print(f'ExaTune {exatune.__version__}')
+print('All imports successful!')
+"
+```
+
+### Step 5: Add Modules to Your Job Scripts
+
+When submitting SLURM jobs, the same modules must be loaded. Add them to your
+ExaTune config:
+
+```yaml
+slurm:
+  modules:
+    - "gcc/11.3.0"
+    - "python/3.10"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+  python_environment: "~/exatune_env"
+```
+
+Or, if using the CLI directly, ensure modules are loaded in your SLURM script
+before activating the virtual environment.
+
+### Compute Canada Troubleshooting
+
+**Error: `dummy wheel` / `metadata-generation-failed` for pyarrow, numpy, scipy, etc.**
+
+This means the package is provided by a Compute Canada module. Load the
+appropriate module and recreate your venv with `--system-site-packages`:
+
+| Package | Module to Load |
+|---------|---------------|
+| `numpy`, `scipy`, `pandas`, `scikit-learn`, `matplotlib`, `joblib` | `scipy-stack` |
+| `pyarrow` | `arrow` |
+| `xgboost` | Usually installs via pip (no module needed) |
+
+```bash
+deactivate  # if venv is active
+module load gcc python scipy-stack arrow
+python -m venv --system-site-packages ~/exatune_env
+source ~/exatune_env/bin/activate
+pip install -e .
+```
+
+**Error: Module version conflicts**
+
+Use `module spider <package>` to see available versions and their dependencies:
+
+```bash
+module spider arrow
+module spider scipy-stack
+```
+
+Some module versions require specific `gcc` or `python` versions. The `spider`
+output will tell you which combinations are valid.
+
+**Error: `pip install` hangs or is very slow**
+
+On login nodes with limited resources, builds can be slow. Use `--no-build-isolation`
+or request an interactive job:
+
+```bash
+salloc --time=0:30:00 --mem=4G --cpus-per-task=2
+module load gcc python scipy-stack arrow
+source ~/exatune_env/bin/activate
+pip install -e .
+```
+
+**Ensuring consistency between login and compute nodes**
+
+All Compute Canada clusters use a shared filesystem (`/home`, `/project`,
+`/scratch`), so packages installed in your venv on the login node are available
+on compute nodes — as long as the same modules are loaded.
+
+### Recommended `.bashrc` / Module Setup
+
+Add this to your `~/.bashrc` or create a setup script:
+
+```bash
+# File: ~/setup_exatune.sh
+module load gcc/11.3.0 python/3.10 scipy-stack/2023b arrow/14.0.1
+source ~/exatune_env/bin/activate
+```
+
+Then use: `source ~/setup_exatune.sh`
+
+---
+
 ## System Requirements
 
 - **Python**: 3.8 or higher

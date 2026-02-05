@@ -26,9 +26,16 @@ echo "Running on: $(hostname)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "=================================================="
 
-# Load Python environment
+# Load environment modules
+{% if modules %}
+{% for module in modules %}
+module load {{ module }}
+{% endfor %}
+{% endif %}
+
+# Activate Python environment
 {% if python_env %}
-{{ python_env }}
+source {{ python_env }}/bin/activate
 {% else %}
 # Default: assume Python is in PATH
 {% endif %}

@@ -81,6 +81,11 @@ slurm:
   cpus_per_task: 2
   nodes: 1
   email_type: "FAIL"
+  modules:
+    - "gcc/11.3.0"
+    - "python/3.10"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
 
 storage:
   backend: "parquet"

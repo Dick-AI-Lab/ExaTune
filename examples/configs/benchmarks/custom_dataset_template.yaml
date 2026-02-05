@@ -90,6 +90,19 @@ slurm:
   nodes: 1
   email_type: "FAIL"
 
+  # Compute Canada / Alliance Canada modules
+  # Adjust versions based on what's available on your cluster:
+  #   module spider python
+  #   module spider arrow
+  modules:
+    - "gcc/11.3.0"
+    - "python/3.10"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+  # Path to your virtual environment on the cluster
+  # python_environment: "~/exatune_env"
+
 storage:
   backend: "parquet"
   compress: true

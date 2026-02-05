@@ -115,6 +115,13 @@ class SlurmConfig(BaseModel):
     array_size: Optional[int] = Field(
         None, description="Maximum concurrent array jobs (None = unlimited)"
     )
+    modules: List[str] = Field(
+        default_factory=list,
+        description="Environment modules to load before running jobs (e.g., ['python/3.10', 'scipy-stack/2023b'])",
+    )
+    python_environment: Optional[str] = Field(
+        None, description="Path to Python virtual environment to activate (e.g., '~/exatune_env')"
+    )
     additional_directives: Dict[str, str] = Field(
         default_factory=dict, description="Additional SLURM directives"
     )
