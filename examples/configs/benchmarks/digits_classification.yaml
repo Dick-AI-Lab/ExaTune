@@ -28,20 +28,20 @@ model:
 
 hyperparameters:
   C:
-    type: "discrete"
+    type: "categorical"
     values: [0.01, 0.1, 1.0, 10.0, 100.0]
   kernel:
-    type: "discrete"
+    type: "categorical"
     values: ["linear", "rbf", "poly", "sigmoid"]
   gamma:
-    type: "discrete"
-    values: ["scale", "auto", 0.001, 0.01, 0.1, 1.0]
+    type: "categorical"
+    values: [0.001, 0.01, 0.1, 1.0]
   degree:
-    type: "discrete"
+    type: "categorical"
     values: [2, 3, 4, 5]  # Only for poly kernel
 
 dataset:
-  name: "digits"
+  name: "categorical"
   test_size: 0.2
   random_state: 42
   stratify: true
@@ -59,7 +59,7 @@ evaluation:
   n_jobs: 1
 
 slurm:
-  partition: "compute"
+#  partition: "compute"
   time: "01:00:00"
   memory: "8G"
   cpus_per_task: 2

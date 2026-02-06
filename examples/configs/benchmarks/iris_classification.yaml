@@ -28,20 +28,20 @@ model:
 
 hyperparameters:
   n_estimators:
-    type: "discrete"
+    type: "categorical"
     values: [10, 25, 50, 100, 200, 300]
   max_depth:
-    type: "discrete"
+    type: "categorical"
     values: [2, 3, 5, 7, 10, 15, 20, null]
   min_samples_split:
-    type: "discrete"
+    type: "categorical"
     values: [2, 5, 10, 20, 30]
   min_samples_leaf:
-    type: "discrete"
+    type: "categorical"
     values: [1, 2, 4, 8, 16]
   max_features:
-    type: "discrete"
-    values: ["sqrt", "log2", 0.5, 0.8, null]
+    type: "categorical"
+    values: ["sqrt", "log2"]
 
 dataset:
   name: "iris"
@@ -63,9 +63,9 @@ evaluation:
   n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
 
 slurm:
-  partition: "compute"
+  #partition: "cpularge_bynode_b4"
   time: "00:30:00"
-  memory: "4G"
+  memory: "4096M"
   cpus_per_task: 2
   nodes: 1
   email_type: "FAIL"

@@ -44,7 +44,7 @@ class SlurmClient:
             RuntimeError: If SLURM is not available
         """
         try:
-            subprocess.run(["sbatch", "--version"], capture_output=True, check=True, timeout=5)
+            subprocess.run(["sbatch", "--version"], capture_output=True, check=True, timeout=30)
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
             raise RuntimeError(
                 "SLURM is not available. Ensure you are on a SLURM-enabled system "

@@ -20,6 +20,7 @@ experiment:
 
 model:
   type: "xgboost"
+  class_name: "xgboost.XGBClassifier"
   task: "classification"
   fixed_params:
     objective: "binary:logistic"
@@ -29,31 +30,31 @@ model:
 
 hyperparameters:
   n_estimators:
-    type: "discrete"
+    type: "categorical"
     values: [50, 100, 200, 300, 500]
   learning_rate:
-    type: "discrete"
+    type: "categorical"
     values: [0.001, 0.01, 0.05, 0.1, 0.2, 0.3]
   max_depth:
-    type: "discrete"
+    type: "categorical"
     values: [3, 4, 5, 6, 7, 8, 10]
   min_child_weight:
-    type: "discrete"
+    type: "categorical"
     values: [1, 3, 5, 7, 10]
   subsample:
-    type: "discrete"
+    type: "categorical"
     values: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
   colsample_bytree:
-    type: "discrete"
+    type: "categorical"
     values: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
   gamma:
-    type: "discrete"
+    type: "categorical"
     values: [0, 0.1, 0.2, 0.5, 1.0]
   reg_alpha:
-    type: "discrete"
+    type: "categorical"
     values: [0, 0.01, 0.1, 0.5, 1.0]
   reg_lambda:
-    type: "discrete"
+    type: "categorical"
     values: [0.1, 0.5, 1.0, 2.0, 5.0]
 
 dataset:
@@ -75,9 +76,9 @@ evaluation:
   n_jobs: 1
 
 slurm:
-  partition: "compute"
+  #partition: "compute"
   time: "02:00:00"
-  memory: "8G"
+  memory: "8192M"
   cpus_per_task: 2
   nodes: 1
   email_type: "FAIL"
