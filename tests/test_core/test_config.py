@@ -22,40 +22,40 @@ class TestHyperparameterSpec:
     """Tests for HyperparameterSpec class."""
 
     def test_discrete_values(self):
-        """Test discrete hyperparameter specification."""
+        """Test hyperparameter specification with explicit values."""
         spec = HyperparameterSpec(
-            type="discrete",
+            type="int",
             values=[10, 50, 100]
         )
-        assert spec.type == "discrete"
+        assert spec.type == "int"
         assert spec.values == [10, 50, 100]
-        assert spec.min_value is None
-        assert spec.max_value is None
+        assert spec.min is None
+        assert spec.max is None
 
     def test_range_values(self):
-        """Test range hyperparameter specification."""
+        """Test hyperparameter specification with min/max range."""
         spec = HyperparameterSpec(
-            type="range",
-            min_value=0.01,
-            max_value=1.0,
-            num_values=10,
+            type="float",
+            min=0.01,
+            max=1.0,
+            step=0.1,
             scale="log"
         )
-        assert spec.type == "range"
-        assert spec.min_value == 0.01
-        assert spec.max_value == 1.0
-        assert spec.num_values == 10
+        assert spec.type == "float"
+        assert spec.min == 0.01
+        assert spec.max == 1.0
+        assert spec.step == 0.1
         assert spec.scale == "log"
 
-    def test_invalid_discrete_no_values(self):
-        """Test that discrete spec requires values."""
+    def test_invalid_no_values_or_range(self):
+        """Test that spec requires either values or min/max."""
         with pytest.raises(ValueError):
-            HyperparameterSpec(type="discrete")
+            HyperparameterSpec(type="int")
 
-    def test_invalid_range_no_bounds(self):
-        """Test that range spec requires min/max values."""
+    def test_invalid_missing_max(self):
+        """Test that range spec requires both min and max."""
         with pytest.raises(ValueError):
-            HyperparameterSpec(type="range", num_values=10)
+            HyperparameterSpec(type="float", min=0.01)
 
 
 class TestModelConfig:
@@ -76,12 +76,12 @@ class TestModelConfig:
         """Test XGBoost model configuration."""
         config = ModelConfig(
             type="xgboost",
+            class_name="XGBRegressor",
             task="regression"
         )
         assert config.type == "xgboost"
         assert config.task == "regression"
-        # XGBoost doesn't require class_name
-        assert config.class_name is None
+        assert config.class_name == "XGBRegressor"
 
     def test_invalid_task(self):
         """Test that invalid task raises error."""
@@ -111,7 +111,7 @@ class TestDatasetConfig:
             target_column="target"
         )
         assert config.name == "custom"
-        assert config.path == "/path/to/data.csv"
+        assert config.path == Path("/path/to/data.csv")
         assert config.target_column == "target"
 
 
@@ -126,7 +126,7 @@ class TestEvaluationConfig:
         )
         assert config.cv_folds == 5
         assert config.scoring == "accuracy"
-        assert config.additional_metrics is None
+        assert config.additional_metrics == []
 
     def test_with_additional_metrics(self):
         """Test evaluation with additional metrics."""
@@ -209,7 +209,7 @@ class TestExaTuneConfig:
                 "task": "classification"
             },
             "hyperparameters": {
-                "max_depth": {"type": "discrete", "values": [3, 5, 7]}
+                "max_depth": [3, 5, 7]
             },
             "evaluation": {
                 "cv_folds": 5,
@@ -237,7 +237,7 @@ class TestExaTuneConfig:
         specs = config.get_hyperparameter_specs()
         assert "max_depth" in specs
         assert isinstance(specs["max_depth"], HyperparameterSpec)
-        assert specs["max_depth"].type == "discrete"
+        assert specs["max_depth"].type == "int"
 
     def test_yaml_roundtrip(self, minimal_config_dict):
         """Test saving and loading config from YAML."""
@@ -254,19 +254,16 @@ class TestExaTuneConfig:
             assert loaded_config.dataset.name == config.dataset.name
             assert loaded_config.model.type == config.model.type
 
-    def test_json_roundtrip(self, minimal_config_dict):
-        """Test saving and loading config from JSON."""
+    def test_dict_roundtrip(self, minimal_config_dict):
+        """Test converting config to dict and back."""
         config = ExaTuneConfig.from_dict(minimal_config_dict)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            json_path = Path(tmpdir) / "config.json"
-            config.to_json(json_path)
+        # Convert to dict and back
+        config_dict = config.to_dict()
+        loaded_config = ExaTuneConfig.from_dict(config_dict)
 
-            # Load back
-            loaded_config = load_config(json_path)
-
-            assert loaded_config.experiment.name == config.experiment.name
-            assert loaded_config.dataset.name == config.dataset.name
+        assert loaded_config.experiment.name == config.experiment.name
+        assert loaded_config.dataset.name == config.dataset.name
 
     def test_missing_required_field(self):
         """Test that missing required field raises error."""
@@ -280,13 +277,13 @@ class TestExaTuneConfig:
     def test_multiple_hyperparameters(self, minimal_config_dict):
         """Test configuration with multiple hyperparameters."""
         minimal_config_dict["hyperparameters"] = {
-            "max_depth": {"type": "discrete", "values": [3, 5, 7]},
-            "min_samples_split": {"type": "discrete", "values": [2, 5, 10]},
+            "max_depth": [3, 5, 7],
+            "min_samples_split": [2, 5, 10],
             "learning_rate": {
-                "type": "range",
-                "min_value": 0.01,
-                "max_value": 1.0,
-                "num_values": 10,
+                "type": "float",
+                "min": 0.01,
+                "max": 1.0,
+                "step": 0.1,
                 "scale": "log"
             }
         }
@@ -319,7 +316,7 @@ class TestConfigValidation:
             load_config("/nonexistent/path/config.yaml")
 
     def test_empty_hyperparameters(self):
-        """Test that empty hyperparameters raises error."""
+        """Test that empty hyperparameters results in empty specs."""
         config_dict = {
             "experiment": {"name": "test", "output_dir": "/tmp"},
             "dataset": {"name": "iris"},
@@ -337,9 +334,9 @@ class TestConfigValidation:
                 "cpus_per_task": 1
             }
         }
-        with pytest.raises(ValueError):
-            config = ExaTuneConfig.from_dict(config_dict)
-            config.get_hyperparameter_specs()
+        config = ExaTuneConfig.from_dict(config_dict)
+        specs = config.get_hyperparameter_specs()
+        assert specs == {}
 
     def test_sklearn_requires_class_name(self):
         """Test that sklearn models require class_name."""
@@ -351,7 +348,7 @@ class TestConfigValidation:
                 # Missing class_name
                 "task": "classification"
             },
-            "hyperparameters": {"max_depth": {"type": "discrete", "values": [3]}},
+            "hyperparameters": {"max_depth": [3]},
             "evaluation": {"cv_folds": 5, "scoring": "accuracy"},
             "slurm": {
                 "partition": "default",

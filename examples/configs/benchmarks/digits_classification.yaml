@@ -27,18 +27,10 @@ model:
     probability: true  # For ROC AUC computation
 
 hyperparameters:
-  C:
-    type: "discrete"
-    values: [0.01, 0.1, 1.0, 10.0, 100.0]
-  kernel:
-    type: "discrete"
-    values: ["linear", "rbf", "poly", "sigmoid"]
-  gamma:
-    type: "discrete"
-    values: ["scale", "auto", 0.001, 0.01, 0.1, 1.0]
-  degree:
-    type: "discrete"
-    values: [2, 3, 4, 5]  # Only for poly kernel
+  C: [0.01, 0.1, 1.0, 10.0, 100.0]
+  kernel: ["linear", "rbf", "poly", "sigmoid"]
+  gamma: ["scale", "auto", 0.001, 0.01, 0.1, 1.0]
+  degree: [2, 3, 4, 5]  # Only for poly kernel
 
 dataset:
   name: "digits"

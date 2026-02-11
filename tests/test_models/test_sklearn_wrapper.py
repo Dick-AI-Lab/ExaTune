@@ -15,40 +15,51 @@ class TestSklearnWrapperInitialization:
     def test_create_decision_tree(self):
         """Test creating a decision tree wrapper."""
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.tree.DecisionTreeClassifier",
+            model_class="DecisionTreeClassifier",
             hyperparameters={"max_depth": 5},
+            task="classification",
             random_state=42
         )
-        assert wrapper.model is not None
-        assert wrapper.model.max_depth == 5
+        assert wrapper.model_class == "DecisionTreeClassifier"
+        assert wrapper.hyperparameters == {"max_depth": 5}
+        assert wrapper.model is None  # Lazy creation
 
     def test_create_random_forest(self):
         """Test creating a random forest wrapper."""
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.ensemble.RandomForestClassifier",
+            model_class="RandomForestClassifier",
             hyperparameters={"n_estimators": 100, "max_depth": 10},
+            task="classification",
             random_state=42
         )
-        assert wrapper.model.n_estimators == 100
-        assert wrapper.model.max_depth == 10
+        assert wrapper.hyperparameters["n_estimators"] == 100
+        assert wrapper.hyperparameters["max_depth"] == 10
 
     def test_invalid_class_name(self):
-        """Test that invalid class name raises error."""
-        with pytest.raises(Exception):
-            SklearnModelWrapper(
-                class_name="sklearn.invalid.InvalidClass",
-                hyperparameters={},
-                random_state=42
-            )
+        """Test that invalid class name raises error on fit."""
+        wrapper = SklearnModelWrapper(
+            model_class="InvalidClass",
+            hyperparameters={},
+            task="classification",
+            random_state=42
+        )
+        from sklearn.datasets import load_iris
+        X, y = load_iris(return_X_y=True)
+        with pytest.raises(ImportError):
+            wrapper.fit(X, y)
 
     def test_invalid_hyperparameter(self):
-        """Test that invalid hyperparameter raises error."""
+        """Test that invalid hyperparameter raises error on fit."""
+        wrapper = SklearnModelWrapper(
+            model_class="DecisionTreeClassifier",
+            hyperparameters={"invalid_param": 123},
+            task="classification",
+            random_state=42
+        )
+        from sklearn.datasets import load_iris
+        X, y = load_iris(return_X_y=True)
         with pytest.raises(Exception):
-            SklearnModelWrapper(
-                class_name="sklearn.tree.DecisionTreeClassifier",
-                hyperparameters={"invalid_param": 123},
-                random_state=42
-            )
+            wrapper.fit(X, y)
 
 
 class TestSklearnWrapperTraining:
@@ -65,8 +76,9 @@ class TestSklearnWrapperTraining:
         """Test fitting and predicting."""
         X, y = iris_data
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.tree.DecisionTreeClassifier",
+            model_class="DecisionTreeClassifier",
             hyperparameters={"max_depth": 3},
+            task="classification",
             random_state=42
         )
 
@@ -80,8 +92,9 @@ class TestSklearnWrapperTraining:
         """Test scoring."""
         X, y = iris_data
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.tree.DecisionTreeClassifier",
+            model_class="DecisionTreeClassifier",
             hyperparameters={"max_depth": 5},
+            task="classification",
             random_state=42
         )
 
@@ -95,8 +108,9 @@ class TestSklearnWrapperTraining:
         """Test feature importance extraction."""
         X, y = iris_data
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.ensemble.RandomForestClassifier",
+            model_class="RandomForestClassifier",
             hyperparameters={"n_estimators": 10},
+            task="classification",
             random_state=42
         )
 
@@ -119,8 +133,9 @@ class TestSklearnWrapperSerialization:
         X, y = data.data, data.target
 
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.tree.DecisionTreeClassifier",
+            model_class="DecisionTreeClassifier",
             hyperparameters={"max_depth": 3},
+            task="classification",
             random_state=42
         )
         wrapper.fit(X, y)
@@ -165,8 +180,9 @@ class TestSklearnWrapperRegression:
         """Test linear regression wrapper."""
         X, y = regression_data
         wrapper = SklearnModelWrapper(
-            class_name="sklearn.linear_model.LinearRegression",
+            model_class="LinearRegression",
             hyperparameters={},
+            task="regression",
             random_state=42
         )
 

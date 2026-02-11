@@ -30,10 +30,10 @@ def minimal_config():
         "dataset": {"name": "iris"},
         "model": {
             "type": "sklearn",
-            "class_name": "sklearn.tree.DecisionTreeClassifier",
+            "class_name": "DecisionTreeClassifier",
             "task": "classification"
         },
-        "hyperparameters": {"max_depth": {"type": "discrete", "values": [3]}},
+        "hyperparameters": {"max_depth": [3]},
         "evaluation": {
             "cv_folds": 3,
             "scoring": "accuracy",
@@ -80,11 +80,12 @@ class TestCreateModelWrapper:
         hyperparameters = {"max_depth": 5}
         wrapper = create_model_wrapper(minimal_config, hyperparameters)
         assert wrapper is not None
-        assert wrapper.model.max_depth == 5
+        assert wrapper.hyperparameters["max_depth"] == 5
 
     def test_create_xgboost_wrapper(self, minimal_config):
         """Test creating XGBoost wrapper."""
         minimal_config.model.type = "xgboost"
+        minimal_config.model.class_name = "XGBClassifier"
         hyperparameters = {"max_depth": 3, "learning_rate": 0.1}
         wrapper = create_model_wrapper(minimal_config, hyperparameters)
         assert wrapper is not None

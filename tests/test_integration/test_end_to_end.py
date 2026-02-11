@@ -29,12 +29,12 @@ def minimal_config():
         "dataset": {"name": "iris"},
         "model": {
             "type": "sklearn",
-            "class_name": "sklearn.tree.DecisionTreeClassifier",
+            "class_name": "DecisionTreeClassifier",
             "task": "classification"
         },
         "hyperparameters": {
-            "max_depth": {"type": "discrete", "values": [3, 5]},
-            "min_samples_split": {"type": "discrete", "values": [2]}
+            "max_depth": [3, 5],
+            "min_samples_split": [2]
         },
         "evaluation": {
             "cv_folds": 3,
@@ -72,7 +72,8 @@ class TestEndToEndWorkflow:
             # Check metadata
             assert (experiment.output_dir / "metadata.json").exists()
 
-    def test_job_generation(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_job_generation(self, mock_check_slurm, minimal_config):
         """Test job script generation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -80,7 +81,7 @@ class TestEndToEndWorkflow:
             experiment = Experiment.from_dict(minimal_config)
             n_jobs = experiment.generate_jobs()
 
-            # Should generate 2 jobs (2 max_depth values × 1 min_samples_split)
+            # Should generate 2 jobs (2 max_depth values x 1 min_samples_split)
             assert n_jobs == 2
 
             # Check job scripts exist
@@ -92,9 +93,10 @@ class TestEndToEndWorkflow:
             assert "#!/bin/bash" in job_script_content
             assert "worker.py" in job_script_content
 
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
     @patch('exatune.hpc.slurm_client.SlurmClient.is_slurm_available')
     @patch('exatune.hpc.slurm_client.SlurmClient.submit_job')
-    def test_job_submission_workflow(self, mock_submit, mock_available, minimal_config):
+    def test_job_submission_workflow(self, mock_submit, mock_available, mock_check, minimal_config):
         """Test job submission with mocked SLURM."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -117,7 +119,8 @@ class TestEndToEndWorkflow:
             checkpoint_file = experiment.checkpoints_dir / "after_submission.json"
             assert checkpoint_file.exists()
 
-    def test_result_collection_workflow(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_result_collection_workflow(self, mock_check_slurm, minimal_config):
         """Test result collection from generated results."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -227,9 +230,10 @@ class TestLocalExecution:
 class TestCheckpointResume:
     """Tests for checkpoint and resume functionality."""
 
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
     @patch('exatune.hpc.slurm_client.SlurmClient.is_slurm_available')
     @patch('exatune.hpc.slurm_client.SlurmClient.submit_job')
-    def test_checkpoint_save_load(self, mock_submit, mock_available, minimal_config):
+    def test_checkpoint_save_load(self, mock_submit, mock_available, mock_check, minimal_config):
         """Test checkpoint saving and loading."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -262,7 +266,8 @@ class TestCheckpointResume:
 class TestErrorHandling:
     """Tests for error handling in integration scenarios."""
 
-    def test_missing_results_detection(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_missing_results_detection(self, mock_check_slurm, minimal_config):
         """Test detection of missing job results."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -290,7 +295,8 @@ class TestErrorHandling:
             # Should only have 1 result
             assert len(results_df) == 1
 
-    def test_failed_job_handling(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_failed_job_handling(self, mock_check_slurm, minimal_config):
         """Test handling of failed job results."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -338,7 +344,8 @@ class TestErrorHandling:
 class TestConfigurationVariations:
     """Tests for different configuration scenarios."""
 
-    def test_xgboost_configuration(self):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_xgboost_configuration(self, mock_check_slurm):
         """Test with XGBoost model configuration."""
         config = {
             "experiment": {
@@ -349,11 +356,12 @@ class TestConfigurationVariations:
             "dataset": {"name": "iris"},
             "model": {
                 "type": "xgboost",
+                "class": "XGBClassifier",
                 "task": "classification"
             },
             "hyperparameters": {
-                "max_depth": {"type": "discrete", "values": [3]},
-                "learning_rate": {"type": "discrete", "values": [0.1]}
+                "max_depth": [3],
+                "learning_rate": [0.1]
             },
             "evaluation": {
                 "cv_folds": 3,
@@ -387,11 +395,11 @@ class TestConfigurationVariations:
             "dataset": {"name": "iris"},
             "model": {
                 "type": "sklearn",
-                "class_name": "sklearn.ensemble.RandomForestClassifier",
+                "class_name": "RandomForestClassifier",
                 "task": "classification"
             },
             "hyperparameters": {
-                "n_estimators": {"type": "discrete", "values": [10]}
+                "n_estimators": [10]
             },
             "evaluation": {
                 "cv_folds": 5,

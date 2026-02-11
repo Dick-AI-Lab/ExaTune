@@ -146,15 +146,9 @@ def create_example_config(dataset_path: Path, task: str):
   fixed_params:
     random_state: 42"""
 
-        hyperparameters = """  n_estimators:
-    type: "discrete"
-    values: [50, 100, 200]
-  max_depth:
-    type: "discrete"
-    values: [5, 10, 15, null]
-  min_samples_split:
-    type: "discrete"
-    values: [2, 5, 10]"""
+        hyperparameters = """  n_estimators: [50, 100, 200]
+  max_depth: [5, 10, 15, null]
+  min_samples_split: [2, 5, 10]"""
 
         evaluation = """  cv_folds: 5
   cv_strategy: "stratified"
@@ -171,15 +165,9 @@ def create_example_config(dataset_path: Path, task: str):
   fixed_params:
     random_state: 42"""
 
-        hyperparameters = """  n_estimators:
-    type: "discrete"
-    values: [50, 100, 200]
-  max_depth:
-    type: "discrete"
-    values: [5, 10, 15, null]
-  min_samples_split:
-    type: "discrete"
-    values: [2, 5, 10]"""
+        hyperparameters = """  n_estimators: [50, 100, 200]
+  max_depth: [5, 10, 15, null]
+  min_samples_split: [2, 5, 10]"""
 
         evaluation = """  cv_folds: 5
   cv_strategy: "kfold"

@@ -31,8 +31,8 @@ def minimal_config():
             "task": "classification"
         },
         "hyperparameters": {
-            "max_depth": {"type": "discrete", "values": [3, 5]},
-            "min_samples_split": {"type": "discrete", "values": [2, 4]}
+            "max_depth": [3, 5],
+            "min_samples_split": [2, 4]
         },
         "evaluation": {
             "cv_folds": 3,
@@ -124,7 +124,8 @@ class TestExperimentInitialization:
 class TestJobGeneration:
     """Tests for job script generation."""
 
-    def test_generate_jobs(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_generate_jobs(self, mock_check_slurm, minimal_config):
         """Test job script generation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -137,7 +138,8 @@ class TestJobGeneration:
             job_scripts = list(experiment.jobs_dir.glob("job_*.sh"))
             assert len(job_scripts) == 4
 
-    def test_job_script_content(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_job_script_content(self, mock_check_slurm, minimal_config):
         """Test that job scripts have correct content."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -157,7 +159,8 @@ class TestJobGeneration:
             assert "--job-id" in content
             assert "--hyperparameters" in content
 
-    def test_create_job_script_with_seed(self, minimal_config):
+    @patch('exatune.hpc.slurm_client.SlurmClient._check_slurm_available')
+    def test_create_job_script_with_seed(self, mock_check_slurm, minimal_config):
         """Test that job scripts use correct random seeds."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
@@ -177,13 +180,16 @@ class TestJobGeneration:
 class TestJobSubmission:
     """Tests for job submission (mocked)."""
 
-    @patch('exatune.core.experiment.SlurmClient')
+    @patch('exatune.hpc.slurm_client.SlurmClient')
     def test_submit_jobs_checks_slurm(self, mock_slurm_class, minimal_config):
         """Test that submit_jobs checks for SLURM availability."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
             experiment = Experiment.from_dict(minimal_config)
-            experiment.generate_jobs()
+
+            # Create dummy job scripts so generate_jobs isn't needed
+            for i in range(4):
+                (experiment.jobs_dir / f"job_{i:06d}.sh").write_text("#!/bin/bash\n")
 
             # Mock SLURM not available
             mock_slurm_class.is_slurm_available.return_value = False
@@ -192,13 +198,16 @@ class TestJobSubmission:
 
             assert job_ids == []
 
-    @patch('exatune.core.experiment.SlurmClient')
+    @patch('exatune.hpc.slurm_client.SlurmClient')
     def test_submit_individual_jobs(self, mock_slurm_class, minimal_config):
         """Test submitting individual jobs."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
             experiment = Experiment.from_dict(minimal_config)
-            experiment.generate_jobs()
+
+            # Create dummy job scripts so generate_jobs isn't needed
+            for i in range(4):
+                (experiment.jobs_dir / f"job_{i:06d}.sh").write_text("#!/bin/bash\n")
 
             # Mock SLURM available
             mock_slurm_class.is_slurm_available.return_value = True
@@ -212,13 +221,16 @@ class TestJobSubmission:
             assert job_ids == ["job_1", "job_2", "job_3", "job_4"]
             assert mock_client.submit_job.call_count == 4
 
-    @patch('exatune.core.experiment.SlurmClient')
+    @patch('exatune.hpc.slurm_client.SlurmClient')
     def test_submit_saves_checkpoint(self, mock_slurm_class, minimal_config):
         """Test that job submission saves checkpoint."""
         with tempfile.TemporaryDirectory() as tmpdir:
             minimal_config["experiment"]["output_dir"] = tmpdir
             experiment = Experiment.from_dict(minimal_config)
-            experiment.generate_jobs()
+
+            # Create dummy job scripts so generate_jobs isn't needed
+            for i in range(4):
+                (experiment.jobs_dir / f"job_{i:06d}.sh").write_text("#!/bin/bash\n")
 
             # Mock SLURM
             mock_slurm_class.is_slurm_available.return_value = True
@@ -236,7 +248,7 @@ class TestJobSubmission:
 class TestJobMonitoring:
     """Tests for job monitoring (mocked)."""
 
-    @patch('exatune.core.experiment.SlurmClient')
+    @patch('exatune.hpc.slurm_client.SlurmClient')
     def test_monitor_no_jobs(self, mock_slurm_class, minimal_config):
         """Test monitoring with no jobs."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -246,7 +258,7 @@ class TestJobMonitoring:
             # No jobs submitted - should return without error
             experiment.monitor_progress()  # Should not crash
 
-    @patch('exatune.core.experiment.SlurmClient')
+    @patch('exatune.hpc.slurm_client.SlurmClient')
     def test_monitor_checks_slurm(self, mock_slurm_class, minimal_config):
         """Test that monitor checks SLURM availability."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -361,9 +373,9 @@ class TestResultCollection:
             results = experiment.collect_results()
 
             assert "rank" in results.columns
-            # Ranks should be 2, 1, 3 (based on scores 0.90, 0.95, 0.92)
+            # Ranks: 0.95 -> rank 1, 0.92 -> rank 2, 0.90 -> rank 3
             ranks = results.sort_values("job_id")["rank"].tolist()
-            assert ranks == [2, 1, 3]
+            assert ranks == [3, 1, 2]
 
 
 class TestCheckpoints:

@@ -60,9 +60,9 @@ def create_model_configs(dataset: str = "iris") -> Dict[str, Dict]:
                 "fixed_params": {"random_state": 42},
             },
             "hyperparameters": {
-                "n_estimators": {"type": "discrete", "values": [50, 100, 200]},
-                "max_depth": {"type": "discrete", "values": [5, 10, 15, None]},
-                "min_samples_split": {"type": "discrete", "values": [2, 5, 10]},
+                "n_estimators": [50, 100, 200],
+                "max_depth": [5, 10, 15, None],
+                "min_samples_split": [2, 5, 10],
             },
         },
         "gradient_boosting": {
@@ -74,9 +74,9 @@ def create_model_configs(dataset: str = "iris") -> Dict[str, Dict]:
                 "fixed_params": {"random_state": 42},
             },
             "hyperparameters": {
-                "n_estimators": {"type": "discrete", "values": [50, 100, 200]},
-                "learning_rate": {"type": "discrete", "values": [0.01, 0.1, 0.2]},
-                "max_depth": {"type": "discrete", "values": [3, 5, 7]},
+                "n_estimators": [50, 100, 200],
+                "learning_rate": [0.01, 0.1, 0.2],
+                "max_depth": [3, 5, 7],
             },
         },
         "svm": {
@@ -88,15 +88,16 @@ def create_model_configs(dataset: str = "iris") -> Dict[str, Dict]:
                 "fixed_params": {"random_state": 42},
             },
             "hyperparameters": {
-                "C": {"type": "discrete", "values": [0.1, 1.0, 10.0]},
-                "kernel": {"type": "discrete", "values": ["rbf", "linear", "poly"]},
-                "gamma": {"type": "discrete", "values": ["scale", "auto"]},
+                "C": [0.1, 1.0, 10.0],
+                "kernel": ["rbf", "linear", "poly"],
+                "gamma": ["scale", "auto"],
             },
         },
         "xgboost": {
             **base_config,
             "model": {
                 "type": "xgboost",
+                "class": "XGBClassifier",
                 "task": "classification",
                 "fixed_params": {
                     "objective": "multi:softprob",
@@ -104,10 +105,10 @@ def create_model_configs(dataset: str = "iris") -> Dict[str, Dict]:
                 },
             },
             "hyperparameters": {
-                "n_estimators": {"type": "discrete", "values": [50, 100, 200]},
-                "learning_rate": {"type": "discrete", "values": [0.01, 0.1, 0.2]},
-                "max_depth": {"type": "discrete", "values": [3, 5, 7]},
-                "subsample": {"type": "discrete", "values": [0.7, 0.8, 1.0]},
+                "n_estimators": [50, 100, 200],
+                "learning_rate": [0.01, 0.1, 0.2],
+                "max_depth": [3, 5, 7],
+                "subsample": [0.7, 0.8, 1.0],
             },
         },
     }

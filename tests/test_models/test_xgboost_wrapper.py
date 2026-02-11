@@ -8,6 +8,15 @@ from pathlib import Path
 
 from exatune.models.xgboost_wrapper import XGBoostModelWrapper
 
+# Check if xgboost is properly available (needs libomp on macOS)
+try:
+    import xgboost as xgb
+    _xgb_available = True
+except Exception:
+    _xgb_available = False
+
+xgb_required = pytest.mark.skipif(not _xgb_available, reason="XGBoost not available (missing libomp?)")
+
 
 class TestXGBoostWrapperInitialization:
     """Tests for XGBoostModelWrapper initialization."""
@@ -15,16 +24,18 @@ class TestXGBoostWrapperInitialization:
     def test_create_classifier(self):
         """Test creating an XGBoost classifier."""
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 3, "learning_rate": 0.1},
             task="classification",
             random_state=42
         )
-        assert wrapper.booster is None  # Not trained yet
+        assert wrapper.model is None  # Not trained yet
         assert wrapper.task == "classification"
 
     def test_create_regressor(self):
         """Test creating an XGBoost regressor."""
         wrapper = XGBoostModelWrapper(
+            model_class="XGBRegressor",
             hyperparameters={"max_depth": 5, "learning_rate": 0.05},
             task="regression",
             random_state=42
@@ -34,13 +45,15 @@ class TestXGBoostWrapperInitialization:
     def test_default_hyperparameters(self):
         """Test wrapper with default hyperparameters."""
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={},
             task="classification",
             random_state=42
         )
-        assert wrapper.booster is None
+        assert wrapper.model is None
 
 
+@xgb_required
 class TestXGBoostWrapperTraining:
     """Tests for XGBoost model training."""
 
@@ -55,6 +68,7 @@ class TestXGBoostWrapperTraining:
         """Test fitting and predicting with classifier."""
         X, y = iris_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 3, "n_estimators": 10},
             task="classification",
             random_state=42
@@ -71,6 +85,7 @@ class TestXGBoostWrapperTraining:
         """Test scoring classifier."""
         X, y = iris_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 5, "n_estimators": 50},
             task="classification",
             random_state=42
@@ -86,6 +101,7 @@ class TestXGBoostWrapperTraining:
         """Test feature importance extraction."""
         X, y = iris_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 3, "n_estimators": 10},
             task="classification",
             random_state=42
@@ -108,22 +124,23 @@ class TestXGBoostWrapperTraining:
         )
 
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={
                 "max_depth": 3,
                 "n_estimators": 100,
-                "early_stopping_rounds": 10
             },
             task="classification",
             random_state=42
         )
 
-        # Fit with validation set
-        wrapper.fit(X_train, y_train, eval_set=[(X_val, y_val)])
+        # Fit with validation set and early stopping
+        wrapper.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=10)
 
-        # Should have stopped before 100 iterations
-        assert wrapper.booster is not None
+        # Should have trained
+        assert wrapper.model is not None
 
 
+@xgb_required
 class TestXGBoostWrapperRegression:
     """Tests for XGBoost regression."""
 
@@ -140,6 +157,7 @@ class TestXGBoostWrapperRegression:
         """Test fitting and predicting with regressor."""
         X, y = regression_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBRegressor",
             hyperparameters={"max_depth": 3, "n_estimators": 50},
             task="regression",
             random_state=42
@@ -154,6 +172,7 @@ class TestXGBoostWrapperRegression:
         """Test scoring regressor (R^2 score)."""
         X, y = regression_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBRegressor",
             hyperparameters={"max_depth": 5, "n_estimators": 50},
             task="regression",
             random_state=42
@@ -166,6 +185,7 @@ class TestXGBoostWrapperRegression:
         assert score > 0.8
 
 
+@xgb_required
 class TestXGBoostWrapperSerialization:
     """Tests for XGBoost model serialization."""
 
@@ -177,6 +197,7 @@ class TestXGBoostWrapperSerialization:
         X, y = data.data, data.target
 
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 3, "n_estimators": 10},
             task="classification",
             random_state=42
@@ -187,18 +208,15 @@ class TestXGBoostWrapperSerialization:
     def test_save_load(self, trained_wrapper):
         """Test saving and loading XGBoost model."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            save_path = Path(tmpdir) / "xgboost_model.json"
+            save_path = Path(tmpdir) / "xgboost_model.pkl"
 
             # Save
             trained_wrapper.save(save_path)
             assert save_path.exists()
 
             # Load
-            loaded_wrapper = XGBoostModelWrapper.load(
-                save_path,
-                task="classification"
-            )
-            assert loaded_wrapper.booster is not None
+            loaded_wrapper = XGBoostModelWrapper.load(save_path)
+            assert loaded_wrapper.model is not None
 
             # Test predictions are same
             from sklearn.datasets import load_iris
@@ -210,6 +228,7 @@ class TestXGBoostWrapperSerialization:
             assert np.array_equal(pred1, pred2)
 
 
+@xgb_required
 class TestXGBoostWrapperAdvanced:
     """Tests for advanced XGBoost features."""
 
@@ -224,6 +243,7 @@ class TestXGBoostWrapperAdvanced:
         """Test accessing raw XGBoost booster."""
         X, y = iris_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={"max_depth": 3, "n_estimators": 10},
             task="classification",
             random_state=42
@@ -240,6 +260,7 @@ class TestXGBoostWrapperAdvanced:
         """Test XGBoost with custom parameters."""
         X, y = iris_data
         wrapper = XGBoostModelWrapper(
+            model_class="XGBClassifier",
             hyperparameters={
                 "max_depth": 3,
                 "n_estimators": 10,

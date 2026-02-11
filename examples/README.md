@@ -164,12 +164,8 @@ model:
     random_state: 42
 
 hyperparameters:
-  n_estimators:
-    type: "discrete"
-    values: [50, 100, 200]
-  max_depth:
-    type: "discrete"
-    values: [5, 10, 15, null]
+  n_estimators: [50, 100, 200]
+  max_depth: [5, 10, 15, null]
 
 dataset:
   name: "iris"  # or path: "/path/to/dataset.csv"
@@ -244,11 +240,11 @@ model:
   task: "classification"
 
 hyperparameters:
-  n_estimators: {type: "discrete", values: [50, 100, 200]}
-  max_depth: {type: "discrete", values: [5, 10, 15, null]}
-  min_samples_split: {type: "discrete", values: [2, 5, 10]}
-  min_samples_leaf: {type: "discrete", values: [1, 2, 4]}
-  max_features: {type: "discrete", values: ["sqrt", "log2", null]}
+  n_estimators: [50, 100, 200]
+  max_depth: [5, 10, 15, null]
+  min_samples_split: [2, 5, 10]
+  min_samples_leaf: [1, 2, 4]
+  max_features: ["sqrt", "log2", null]
 ```
 
 **Gradient Boosting:**
@@ -259,10 +255,10 @@ model:
   task: "classification"
 
 hyperparameters:
-  n_estimators: {type: "discrete", values: [50, 100, 200]}
-  learning_rate: {type: "discrete", values: [0.01, 0.1, 0.2]}
-  max_depth: {type: "discrete", values: [3, 5, 7]}
-  subsample: {type: "discrete", values: [0.7, 0.8, 1.0]}
+  n_estimators: [50, 100, 200]
+  learning_rate: [0.01, 0.1, 0.2]
+  max_depth: [3, 5, 7]
+  subsample: [0.7, 0.8, 1.0]
 ```
 
 **Support Vector Machine:**
@@ -273,9 +269,9 @@ model:
   task: "classification"
 
 hyperparameters:
-  C: {type: "discrete", values: [0.1, 1.0, 10.0]}
-  kernel: {type: "discrete", values: ["rbf", "linear", "poly"]}
-  gamma: {type: "discrete", values: ["scale", "auto"]}
+  C: [0.1, 1.0, 10.0]
+  kernel: ["rbf", "linear", "poly"]
+  gamma: ["scale", "auto"]
 ```
 
 ### XGBoost Models
@@ -290,14 +286,14 @@ model:
     random_state: 42
 
 hyperparameters:
-  n_estimators: {type: "discrete", values: [100, 200, 300]}
-  learning_rate: {type: "discrete", values: [0.01, 0.1, 0.2]}
-  max_depth: {type: "discrete", values: [3, 5, 7]}
-  subsample: {type: "discrete", values: [0.7, 0.8, 1.0]}
-  colsample_bytree: {type: "discrete", values: [0.7, 0.8, 1.0]}
-  gamma: {type: "discrete", values: [0, 0.1, 0.5]}
-  reg_alpha: {type: "discrete", values: [0, 0.1, 1.0]}
-  reg_lambda: {type: "discrete", values: [0.1, 1.0, 5.0]}
+  n_estimators: [100, 200, 300]
+  learning_rate: [0.01, 0.1, 0.2]
+  max_depth: [3, 5, 7]
+  subsample: [0.7, 0.8, 1.0]
+  colsample_bytree: [0.7, 0.8, 1.0]
+  gamma: [0, 0.1, 0.5]
+  reg_alpha: [0, 0.1, 1.0]
+  reg_lambda: [0.1, 1.0, 5.0]
 ```
 
 **XGBoost Regressor:**
@@ -475,8 +471,8 @@ Test with a small hyperparameter grid first:
 
 ```yaml
 hyperparameters:
-  n_estimators: {type: "discrete", values: [50, 100]}  # Just 2 values
-  max_depth: {type: "discrete", values: [5, 10]}       # Just 2 values
+  n_estimators: [50, 100]  # Just 2 values
+  max_depth: [5, 10]       # Just 2 values
 # Grid size: 2 × 2 = 4 configurations
 ```
 

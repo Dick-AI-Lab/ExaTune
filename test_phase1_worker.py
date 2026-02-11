@@ -45,8 +45,8 @@ def test_worker_components():
             "task": "classification",
         },
         "hyperparameters": {
-            "n_estimators": {"type": "discrete", "values": [10, 50, 100]},
-            "max_depth": {"type": "discrete", "values": [3, 5, 7]},
+            "n_estimators": [10, 50, 100],
+            "max_depth": [3, 5, 7],
         },
         "evaluation": {
             "cv_folds": 3,
@@ -180,8 +180,8 @@ def test_experiment_methods():
             "task": "classification",
         },
         "hyperparameters": {
-            "n_estimators": {"type": "discrete", "values": [10, 50]},
-            "max_depth": {"type": "discrete", "values": [3, 5]},
+            "n_estimators": [10, 50],
+            "max_depth": [3, 5],
         },
         "evaluation": {
             "cv_folds": 2,

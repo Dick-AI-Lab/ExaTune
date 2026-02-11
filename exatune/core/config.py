@@ -199,7 +199,7 @@ class ExaTuneConfig(BaseModel):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w") as f:
-            yaml.dump(self.model_dump(mode="python"), f, default_flow_style=False)
+            yaml.dump(self.model_dump(mode="json"), f, default_flow_style=False)
 
     def to_dict(self) -> Dict[str, Any]:
         """
