@@ -240,12 +240,23 @@ class TestCollectCommand:
 
 
 class TestVisualizeCommand:
-    """Tests for the visualize command (placeholder)."""
+    """Tests for the visualize command."""
 
-    def test_visualize_not_implemented(self, runner):
-        """Test that visualize shows not implemented message."""
+    def test_visualize_missing_experiment(self, runner):
+        """Test that visualize aborts when experiment directory doesn't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create experiment directory
+            result = runner.invoke(cli, [
+                "visualize", "nonexistent_exp",
+                "--output-dir", tmpdir,
+            ])
+
+            assert result.exit_code != 0
+            assert "not found" in result.output.lower() or "error" in result.output.lower()
+
+    def test_visualize_no_results_data(self, runner):
+        """Test that visualize handles missing results data gracefully."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create experiment directory but no results files
             exp_dir = Path(tmpdir) / "test_exp"
             exp_dir.mkdir()
 
@@ -255,15 +266,26 @@ class TestVisualizeCommand:
                 "--params", "max_depth"
             ])
 
-            # Should indicate not implemented
-            assert "not" in result.output.lower() or result.exit_code == 0
+            # Should abort with an error about missing/empty results
+            assert result.exit_code != 0
 
 
 class TestAnalyzeCommand:
-    """Tests for the analyze command (placeholder)."""
+    """Tests for the analyze command."""
 
-    def test_analyze_not_implemented(self, runner):
-        """Test that analyze shows not implemented message."""
+    def test_analyze_missing_experiment(self, runner):
+        """Test that analyze aborts when experiment directory doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runner.invoke(cli, [
+                "analyze", "nonexistent_exp",
+                "--output-dir", tmpdir
+            ])
+
+            assert result.exit_code != 0
+            assert "not found" in result.output.lower() or "error" in result.output.lower()
+
+    def test_analyze_no_results_data(self, runner):
+        """Test that analyze handles missing results data gracefully."""
         with tempfile.TemporaryDirectory() as tmpdir:
             exp_dir = Path(tmpdir) / "test_exp"
             exp_dir.mkdir()
@@ -273,8 +295,8 @@ class TestAnalyzeCommand:
                 "--output-dir", tmpdir
             ])
 
-            # Should indicate not implemented
-            assert "not" in result.output.lower() or result.exit_code == 0
+            # Should abort with an error about missing/empty results
+            assert result.exit_code != 0
 
 
 class TestCLIErrorHandling:

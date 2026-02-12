@@ -7,14 +7,18 @@ HPC clusters to map complete hyperparameter performance landscapes.
 """
 
 from exatune.__version__ import __author__, __email__, __license__, __version__
+from exatune.core.config import ExaTuneConfig
+from exatune.core.experiment import Experiment
+from exatune.core.grid_generator import GridGenerator
 
-# Core API exports (will be populated as modules are implemented)
 __all__ = [
     "__version__",
     "__author__",
     "__email__",
     "__license__",
+    "ExaTuneConfig",
+    "Experiment",
+    "GridGenerator",
 ]
 
-# Version info
 VERSION = __version__

@@ -1,3 +1,7 @@
 """HPC integration for SLURM job submission and monitoring."""
 
-__all__ = []
+from exatune.hpc.slurm_client import SlurmClient
+
+__all__ = [
+    "SlurmClient",
+]

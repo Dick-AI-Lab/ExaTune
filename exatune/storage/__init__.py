@@ -1,3 +1,9 @@
 """Storage backends for experiment results."""
 
-__all__ = []
+from exatune.storage.json_backend import JSONStorage
+from exatune.storage.parquet_backend import ParquetStorage
+
+__all__ = [
+    "JSONStorage",
+    "ParquetStorage",
+]

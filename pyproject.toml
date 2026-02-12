@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exatune"
-version = "0.1.0"
+version = "0.2.0"
 description = "Exhaustive hyperparameter landscape exploration via HPC for machine learning models"
 readme = "README.md"
 authors = [
@@ -97,8 +97,8 @@ Issues = "https://github.com/BORN-Ontario/exatune/issues"
 [project.scripts]
 exatune = "exatune.cli.main:cli"
 
-[tool.setuptools]
-packages = ["exatune"]
+[tool.setuptools.packages.find]
+include = ["exatune*"]
 
 [tool.setuptools.package-data]
 exatune = ["hpc/templates/*.sh", "py.typed"]

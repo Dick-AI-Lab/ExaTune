@@ -140,7 +140,7 @@ def collect(experiment_name: str, output_dir: Path) -> None:
 @cli.command()
 @click.argument("experiment_name")
 @click.option("--params", multiple=True, help="Parameters to visualize (specify multiple times)")
-@click.option("--metric", default="accuracy", help="Metric to visualize")
+@click.option("--metric", default="mean_score", help="Metric to visualize")
 @click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
@@ -148,14 +148,51 @@ def collect(experiment_name: str, output_dir: Path) -> None:
     help="Experiment output directory",
 )
 @click.option("--output", type=click.Path(path_type=Path), help="Output file for visualization")
+@click.option(
+    "--type",
+    "plot_type",
+    type=click.Choice(
+        [
+            "heatmap",
+            "surface",
+            "contour",
+            "slice",
+            "slices",
+            "importance",
+            "histogram",
+            "violin",
+            "parallel",
+            "train-vs-test",
+            "dashboard",
+        ]
+    ),
+    default="dashboard",
+    help="Type of visualization to generate",
+)
+@click.option(
+    "--agg",
+    type=click.Choice(["mean", "max", "min", "std"]),
+    default="mean",
+    help="Aggregation function for heatmap/surface/contour",
+)
 def visualize(
-    experiment_name: str, params: tuple, metric: str, output_dir: Path, output: Optional[Path]
+    experiment_name: str,
+    params: tuple,
+    metric: str,
+    output_dir: Path,
+    output: Optional[Path],
+    plot_type: str,
+    agg: str,
 ) -> None:
     """
     Generate visualizations for experiment results.
 
     EXPERIMENT_NAME: Name of the experiment
     """
+    import matplotlib
+
+    matplotlib.use("Agg")
+
     exp_dir = output_dir / experiment_name
 
     if not exp_dir.exists():
@@ -163,10 +200,77 @@ def visualize(
         raise click.Abort()
 
     console.print(f"[bold]Generating visualizations for: {experiment_name}[/bold]\n")
-    console.print(f"Parameters: {', '.join(params) if params else 'all'}")
-    console.print(f"Metric: {metric}\n")
 
-    console.print("[yellow]Visualization not yet implemented[/yellow]")
+    try:
+        # Load results
+        results = _load_experiment_results(exp_dir)
+        param_list = list(params) if params else None
+
+        from exatune.visualization import (
+            plot_all_slices,
+            plot_contour,
+            plot_dashboard,
+            plot_heatmap,
+            plot_importance,
+            plot_parallel_coordinates,
+            plot_score_histogram,
+            plot_score_violin,
+            plot_slice,
+            plot_surface,
+            plot_train_vs_test,
+        )
+
+        # Default output path
+        if output is None:
+            viz_dir = exp_dir / "visualizations"
+            viz_dir.mkdir(exist_ok=True)
+            output = viz_dir / f"{plot_type}.png"
+
+        if plot_type == "dashboard":
+            plot_dashboard(results, metric=metric, params=param_list, output_path=output)
+        elif plot_type == "histogram":
+            plot_score_histogram(results, metric=metric, output_path=output)
+        elif plot_type == "importance":
+            plot_importance(results, metric=metric, params=param_list, output_path=output)
+        elif plot_type == "slices":
+            plot_all_slices(results, params=param_list, metric=metric, output_path=output)
+        elif plot_type == "parallel":
+            plot_parallel_coordinates(results, params=param_list, metric=metric, output_path=output)
+        elif plot_type == "train-vs-test":
+            plot_train_vs_test(results, metric=metric, output_path=output)
+        elif plot_type == "slice":
+            if not param_list:
+                console.print("[red]--params required for slice plot[/red]")
+                raise click.Abort()
+            plot_slice(results, param=param_list[0], metric=metric, output_path=output)
+        elif plot_type == "violin":
+            if not param_list:
+                console.print("[red]--params required for violin plot[/red]")
+                raise click.Abort()
+            plot_score_violin(results, group_by=param_list[0], metric=metric, output_path=output)
+        elif plot_type in ("heatmap", "surface", "contour"):
+            if not param_list or len(param_list) < 2:
+                console.print("[red]--params requires 2 parameters for heatmap/surface/contour[/red]")
+                raise click.Abort()
+            plot_func = {"heatmap": plot_heatmap, "surface": plot_surface, "contour": plot_contour}
+            plot_func[plot_type](
+                results,
+                x_param=param_list[0],
+                y_param=param_list[1],
+                metric=metric,
+                agg_func=agg,
+                output_path=output,
+            )
+
+        import matplotlib.pyplot as plt
+
+        plt.close("all")
+
+        console.print(f"[green]Visualization saved to: {output}[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise click.Abort()
 
 
 @cli.command()
@@ -180,10 +284,29 @@ def visualize(
 @click.option(
     "--metrics",
     multiple=True,
-    default=["smoothness", "multimodality"],
-    help="Landscape metrics to compute",
+    default=["all"],
+    help="Landscape metrics to compute (smoothness, multimodality, importance, interactions, all)",
 )
-def analyze(experiment_name: str, output_dir: Path, metrics: tuple) -> None:
+@click.option("--metric", default="mean_score", help="Performance metric to analyze")
+@click.option(
+    "--direction",
+    type=click.Choice(["maximize", "minimize"]),
+    default="maximize",
+    help="Optimization direction",
+)
+@click.option(
+    "--report",
+    type=click.Path(path_type=Path),
+    help="Generate full report to this directory",
+)
+def analyze(
+    experiment_name: str,
+    output_dir: Path,
+    metrics: tuple,
+    metric: str,
+    direction: str,
+    report: Optional[Path],
+) -> None:
     """
     Analyze hyperparameter landscape characteristics.
 
@@ -196,9 +319,58 @@ def analyze(experiment_name: str, output_dir: Path, metrics: tuple) -> None:
         raise click.Abort()
 
     console.print(f"[bold]Analyzing landscape for: {experiment_name}[/bold]\n")
-    console.print(f"Metrics: {', '.join(metrics)}\n")
 
-    console.print("[yellow]Landscape analysis not yet implemented[/yellow]")
+    try:
+        results = _load_experiment_results(exp_dir)
+
+        from exatune.analysis.summary import compute_experiment_summary, format_summary_text
+
+        metrics_set = set(metrics)
+        run_all = "all" in metrics_set
+
+        summary = compute_experiment_summary(results, metric, direction=direction)
+
+        # Print formatted summary to console
+        console.print(format_summary_text(summary))
+
+        # Generate full report if requested
+        if report is not None:
+            from exatune.analysis.report import generate_report
+
+            report_path = generate_report(
+                results,
+                output_path=report,
+                metric=metric,
+                direction=direction,
+                include_plots=True,
+            )
+            console.print(f"\n[green]Full report saved to: {report_path}[/green]")
+
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise click.Abort()
+
+
+def _load_experiment_results(exp_dir: Path) -> "pd.DataFrame":
+    """Load experiment results from parquet or CSV."""
+    import pandas as pd
+
+    results_dir = exp_dir / "results"
+
+    # Try parquet first, then CSV
+    parquet_path = results_dir / "all_results.parquet"
+    csv_path = results_dir / "all_results.csv"
+
+    if parquet_path.exists():
+        return pd.read_parquet(parquet_path)
+    elif csv_path.exists():
+        return pd.read_csv(csv_path)
+    else:
+        # Try to collect from individual JSON files
+        from exatune.storage.json_backend import JSONStorage
+
+        storage = JSONStorage(str(results_dir))
+        return storage.load_all_results()
 
 
 @cli.command()

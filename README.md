@@ -7,37 +7,27 @@
 
 ## Motivation
 
-Traditional hyperparameter optimization techniques (grid search, random search, Bayesian optimization, genetic algorithms) balance computational efficiency against exhaustive search, often trading completeness for speed. While these methods can find good solutions, they may overlook:
+Traditional hyperparameter optimization techniques (grid search, random search, Bayesian optimization) balance computational efficiency against exhaustive coverage. While these methods find good solutions, they may overlook:
 
 - **Regions of instability** where small parameter changes cause large performance swings
 - **Multiple performance optima** that reveal model behavior patterns
 - **Parameter interactions** that affect generalizability
 - **Chaotic sensitivity regions** that impact reproducibility
 
-With modern HPC infrastructure, we can now revisit exhaustive exploration at scale. By distributing each hyperparameter configuration as an independent job, ExaTune maps entire performance landscapes, enabling researchers to study them as rich, multi-dimensional surfaces with smooth regions, sharp cliffs, and chaotic pockets.
+With modern HPC infrastructure, we can revisit exhaustive exploration at scale. ExaTune distributes each hyperparameter configuration as an independent SLURM job, mapping entire performance landscapes as rich, multi-dimensional surfaces.
 
 ## Key Features
 
-- **Exhaustive Search**: Generate and evaluate all hyperparameter combinations from configuration files
-- **HPC Integration**: Seamless SLURM job submission, monitoring, and result collection
-- **ML Framework Support**: Compatible with scikit-learn and XGBoost models
-- **Flexible Storage**: Results saved as JSON, Parquet, or SQLite for efficient analysis
-- **Rich Visualizations**:
-  - 2D heatmaps for parameter pairs
-  - 3D surface plots for triple-parameter exploration
-  - Interactive dashboards with Plotly/Bokeh
-  - Dimensionality reduction (PCA, t-SNE, UMAP) for high-dimensional landscapes
-- **Landscape Analysis**: Quantify smoothness, multimodality, parameter sensitivity, and interaction effects
-- **Dual Interface**: Both Python API and command-line interface (CLI)
-- **Production Ready**: Type-checked, tested, and documented for research and production use
+- **Exhaustive Search**: Generate and evaluate all hyperparameter combinations from YAML configuration files
+- **HPC Integration**: Seamless SLURM job submission, monitoring, and result collection with Compute Canada module support
+- **ML Framework Support**: scikit-learn and XGBoost model wrappers
+- **Flexible Storage**: Results saved as JSON (per-job) and Parquet (aggregated)
+- **Rich Visualizations**: Heatmaps, 3D surfaces, contour plots, parallel coordinates, slice plots, importance charts, and summary dashboards
+- **Landscape Analysis**: Quantify smoothness (Moran's I, ruggedness), multimodality (local optima, fitness-distance correlation), parameter importance (variance/correlation/range), and interaction effects
+- **Dual Interface**: Python API and Click-based CLI
+- **Comprehensive Testing**: 350+ tests across 23 test files
 
 ## Installation
-
-### From PyPI (when released)
-
-```bash
-pip install exatune
-```
 
 ### From Source
 
@@ -47,20 +37,43 @@ cd exatune
 pip install -e .
 ```
 
-### Development Installation
+### With Development Dependencies
 
 ```bash
-git clone https://github.com/BORN-Ontario/exatune.git
-cd exatune
 pip install -e ".[dev]"
-pre-commit install
+```
+
+### With Visualization Extras
+
+```bash
+pip install -e ".[viz]"     # adds seaborn, plotly, bokeh, umap-learn
+pip install -e ".[all]"     # everything
+```
+
+### On Compute Canada / DRAC Clusters
+
+Compute Canada intercepts packages like numpy, scipy, and pyarrow with dummy wheels. Load modules first:
+
+```bash
+module load gcc/11.3.0 python/3.10 scipy-stack/2023b arrow/14.0.1
+python -m venv --system-site-packages ~/exatune_env
+source ~/exatune_env/bin/activate
+pip install -e .
+```
+
+Add modules to your ExaTune config so SLURM jobs load them too:
+
+```yaml
+slurm:
+  modules: ["gcc/11.3.0", "python/3.10", "scipy-stack/2023b", "arrow/14.0.1"]
+  python_environment: "~/exatune_env"
 ```
 
 ## Quick Start
 
-### 1. Define Your Experiment Configuration
+### 1. Define Your Experiment
 
-Create a YAML configuration file (`config.yaml`):
+Create `config.yaml`:
 
 ```yaml
 experiment:
@@ -70,12 +83,12 @@ experiment:
 model:
   type: "sklearn"
   class: "RandomForestClassifier"
+  task: "classification"
 
 hyperparameters:
   n_estimators: [10, 50, 100, 200]
   max_depth: [3, 5, 10, 15, null]
   min_samples_split: [2, 5, 10]
-  min_samples_leaf: [1, 2, 4]
 
 dataset:
   name: "iris"
@@ -100,103 +113,135 @@ from exatune import Experiment
 
 # Create and run experiment
 experiment = Experiment.from_config("config.yaml")
-experiment.submit_jobs()
+experiment.print_summary()
+experiment.generate_jobs()
+job_ids = experiment.submit_jobs()
 experiment.monitor_progress()
 results = experiment.collect_results()
-
-# Visualize landscape
-from exatune.visualization import plot_heatmap, plot_surface
-
-plot_heatmap(results, x="n_estimators", y="max_depth", metric="accuracy")
-plot_surface(results, x="n_estimators", y="max_depth", z="min_samples_split")
+best = experiment.get_best_config()
 ```
 
-### 3. Run via CLI
+### 3. Visualize Results
+
+```python
+from exatune.visualization import (
+    plot_dashboard, plot_heatmap, plot_importance,
+    plot_parallel_coordinates, plot_all_slices,
+)
+
+# Comprehensive dashboard
+plot_dashboard(results, metric="mean_score", output_path="dashboard.png")
+
+# 2D heatmap
+plot_heatmap(results, x_param="n_estimators", y_param="max_depth",
+             metric="mean_score", output_path="heatmap.png")
+
+# Parameter importance
+plot_importance(results, method="variance", output_path="importance.png")
+
+# Parallel coordinates
+plot_parallel_coordinates(results, highlight_best=10, output_path="parallel.png")
+```
+
+### 4. Analyze Landscape
+
+```python
+from exatune.analysis import (
+    compute_experiment_summary, format_summary_text,
+    find_local_optima, compute_autocorrelation,
+)
+
+# Full analysis
+summary = compute_experiment_summary(results, direction="maximize")
+print(format_summary_text(summary))
+
+# Specific analyses
+optima = find_local_optima(results, direction="maximize")
+smoothness = compute_autocorrelation(results)
+```
+
+### 5. Run via CLI
 
 ```bash
-# Submit experiment
-exatune run config.yaml
-
-# Monitor progress
-exatune status random_forest_iris
-
-# Collect results
-exatune collect random_forest_iris
-
-# Generate visualizations
-exatune visualize random_forest_iris --params n_estimators max_depth
-
-# Analyze landscape
-exatune analyze random_forest_iris --metrics smoothness multimodality sensitivity
+exatune validate config.yaml           # Validate configuration
+exatune run config.yaml --dry-run      # Generate jobs without submitting
+exatune run config.yaml                # Submit to SLURM
+exatune status random_forest_iris      # Check progress
+exatune collect random_forest_iris     # Aggregate results
+exatune visualize random_forest_iris --type dashboard
+exatune analyze random_forest_iris --report ./analysis_output
 ```
-
-## Use Cases
-
-### Healthcare Research
-
-In healthcare ML applications, small improvements in predictive performance can translate into significant clinical impact:
-
-- **Early Disease Detection**: Identify optimal models for rare condition screening
-- **Risk Stratification**: Precisely tune models for patient risk prediction
-- **Resource Allocation**: Optimize predictive models for efficient resource distribution
-
-ExaTune's comprehensive landscape view strengthens reproducibility and interpretability, ensuring models are performant, trustworthy, and resilient across diverse patient populations.
-
-### General ML Research
-
-- **Benchmark Studies**: Systematically compare algorithms across parameter spaces
-- **Model Behavior Analysis**: Understand how hyperparameters affect stability and generalization
-- **Optimization Method Evaluation**: Use complete landscapes as ground truth for testing new optimization algorithms
-- **Publication-Quality Results**: Generate comprehensive visualizations and quantitative landscape metrics
 
 ## Architecture
 
 ```
 exatune/
-├── core/           # Experiment orchestration and configuration
+├── core/           # Configuration (Pydantic), experiment orchestration, grid generation
 ├── models/         # ML model wrappers (scikit-learn, XGBoost)
-├── hpc/            # SLURM integration and job management
-├── storage/        # Result storage backends (JSON, Parquet, SQLite)
-├── visualization/  # Plotting and interactive dashboards
-├── analysis/       # Landscape metrics and sensitivity analysis
-└── cli/            # Command-line interface
+├── hpc/            # SLURM client, worker script, Jinja2 job templates
+├── storage/        # JSON and Parquet storage backends
+├── visualization/  # Heatmaps, surfaces, contours, slices, parallel coords, dashboard
+├── analysis/       # Smoothness, multimodality, importance, interactions, reports
+└── cli/            # Click-based CLI (run, status, collect, visualize, analyze, validate)
 ```
 
-## Requirements
+## Configuration Reference
 
-- Python 3.8+
-- Access to SLURM HPC cluster (for distributed execution)
-- scikit-learn and/or XGBoost (depending on models used)
+### Hyperparameter Specification
 
-## Documentation
+Discrete values:
+```yaml
+n_estimators: [10, 50, 100, 200]
+max_features: ["sqrt", "log2", null]
+```
 
-Full documentation is available at [Read the Docs](https://exatune.readthedocs.io) (coming soon).
+Continuous ranges:
+```yaml
+learning_rate:
+  min: 0.001
+  max: 1.0
+  step: 0.1
+  type: "float"
+  scale: "log"      # or "linear"
+```
 
-- [Installation Guide](docs/installation.rst)
-- [Quick Start Tutorial](docs/quickstart.rst)
-- [HPC Setup Guide](docs/hpc_setup.rst)
-- [Configuration Reference](docs/configuration.rst)
-- [API Reference](docs/api_reference.rst)
-- [Examples](docs/examples.rst)
+### Built-in Datasets
+
+`iris`, `digits`, `wine`, `breast_cancer`, `diabetes`, `california_housing`
+
+### Custom Datasets
+
+```yaml
+dataset:
+  path: "/path/to/data.csv"
+  target_column: "target"
+  test_size: 0.2
+```
+
+## Analysis Metrics
+
+| Category | Metric | What It Answers |
+|----------|--------|----------------|
+| Smoothness | Moran's I | Is the landscape smooth enough for local search? |
+| Smoothness | Ruggedness index | How variable are neighboring configurations? |
+| Multimodality | Local optima count | How many peaks exist? |
+| Multimodality | Fitness-distance correlation | Is the landscape deceptive? |
+| Importance | Variance-based (eta-squared) | Which parameters explain the most variance? |
+| Importance | Spearman correlation | Which parameters have monotonic effects? |
+| Interactions | Pairwise ANOVA | Which parameter pairs interact? |
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Development Setup
-
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/exatune.git`
-3. Create a branch: `git checkout -b feature/your-feature-name`
-4. Install development dependencies: `pip install -e ".[dev]"`
-5. Install pre-commit hooks: `pre-commit install`
-6. Make your changes and add tests
-7. Run tests: `pytest`
-8. Submit a pull request
+```bash
+git clone https://github.com/BORN-Ontario/exatune.git
+cd exatune
+pip install -e ".[dev]"
+pytest
+```
 
 ## Citation
-
-If you use ExaTune in your research, please cite:
 
 ```bibtex
 @software{exatune2025,
@@ -210,7 +255,7 @@ If you use ExaTune in your research, please cite:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
@@ -218,12 +263,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Intern: Katie Lonsway
 - Supervisors: Dr. Kevin Dick, Heather Howley
 - HPC resources provided by Digital Research Alliance of Canada (DRAC)
-
-## Contact
-
-- Issues: [GitHub Issues](https://github.com/BORN-Ontario/exatune/issues)
-- Email: kevin.dick@bornontario.ca
-
----
-
-**Note**: This project is under active development. The API may change before the 1.0 release.
