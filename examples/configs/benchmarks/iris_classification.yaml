@@ -63,15 +63,17 @@ evaluation:
   n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
 
 slurm:
-  #partition: "cpularge_bynode_b4"
+#  partition: "cpubase_bynode_b4"
   time: "00:30:00"
-  memory: "4096M"
+  memory: "4G"
   cpus_per_task: 2
   nodes: 1
   email_type: "FAIL"
+  #adding ENV loading  
+  python_environment: "/scratch/klons06/Exatune/ENV"
   modules:
-    - "gcc/11.3.0"
-    - "python/3.10"
+    - "gcc/13.3"
+    - "python/3.10.13"
     - "scipy-stack/2023b"
     - "arrow/14.0.1"
 

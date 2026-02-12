@@ -58,9 +58,9 @@ def main():
             additional_metrics=["f1_macro", "precision_macro", "recall_macro"],
         ),
         slurm=SlurmConfig(
-#            partition="",
+            partition="cpubase_bynode_b5",
             time="00:30:00",
-            memory="4096M",
+            memory="4G",
             cpus_per_task=2,
             email_type="FAIL",
         )
