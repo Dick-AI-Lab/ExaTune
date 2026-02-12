@@ -19,7 +19,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class_name: "sklearn.ensemble.RandomForestClassifier"
+  class: "sklearn.ensemble.RandomForestClassifier"
   task: "classification"
   fixed_params:
     criterion: "gini"
