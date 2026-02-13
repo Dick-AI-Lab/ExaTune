@@ -5,7 +5,8 @@
 
 experiment:
   name: "iris_rf_benchmark"
-  output_dir: "./results/benchmarks/iris_rf"
+  config: "./scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/iris_rf/config.yaml"
+  output_dir: "./scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/iris_rf/results"
   description: "Random Forest hyperparameter landscape on Iris dataset"
   tags:
     - "benchmark"
@@ -63,7 +64,6 @@ evaluation:
   n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
 
 slurm:
-#  partition: "cpubase_bynode_b4"
   time: "00:30:00"
   memory: "4G"
   cpus_per_task: 2
