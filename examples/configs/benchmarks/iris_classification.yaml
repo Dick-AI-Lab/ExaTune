@@ -5,8 +5,7 @@
 
 experiment:
   name: "iris_rf_benchmark"
-  config: "./scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/iris_rf/config.yaml"
-  output_dir: "./scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/iris_rf/results"
+  output_dir: "./results/benchmarks/iris_rf"
   description: "Random Forest hyperparameter landscape on Iris dataset"
   tags:
     - "benchmark"
