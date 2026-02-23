@@ -116,7 +116,7 @@ class EvaluationConfig(BaseModel):
 class SlurmConfig(BaseModel):
     """Configuration for SLURM job submission."""
 
-    partition: str = Field("compute", description="SLURM partition name")
+    partition: Optional[str] = Field(None, description="SLURM partition name")
     time: str = Field("01:00:00", description="Time limit (HH:MM:SS)")
     memory: str = Field("4G", description="Memory per job")
     cpus_per_task: int = Field(1, ge=1, description="CPUs per task")
