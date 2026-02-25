@@ -2,7 +2,7 @@
 #SBATCH --job-name={{ job_name }}
 #SBATCH --output={{ log_dir }}/{{ job_name }}_%j.out
 #SBATCH --error={{ log_dir }}/{{ job_name }}_%j.err
-#SBATCH --partition={{ partition }}
+{% if partition %}#SBATCH --partition={{ partition }}{% endif %}
 #SBATCH --time={{ time }}
 #SBATCH --mem={{ memory }}
 #SBATCH --cpus-per-task={{ cpus_per_task }}

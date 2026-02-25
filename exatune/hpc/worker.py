@@ -107,8 +107,12 @@ def create_model_wrapper(config: ExaTuneConfig, hyperparameters: Dict[str, Any])
     if model_type == "sklearn":
         from exatune.models.sklearn_wrapper import SklearnModelWrapper
 
+        # Extract just the class name from full path (e.g., 'RandomForestClassifier' from 'sklearn.ensemble.RandomForestClassifier')
+        full_class_path = config.model.class_name
+        model_class_name = full_class_path.split('.')[-1]
+
         return SklearnModelWrapper(
-            model_class=config.model.class_name,
+            model_class=model_class_name,
             hyperparameters=hyperparameters,
             task=config.model.task,
             random_state=config.experiment.random_seed,
@@ -161,7 +165,7 @@ def perform_cross_validation(
     if config.evaluation.additional_metrics:
         scoring_metrics.extend(config.evaluation.additional_metrics)
 
-    # Ensure model is created before cross-validation
+    # Create the model instance before cross-validation
     if model_wrapper.model is None:
         model_wrapper.model = model_wrapper._create_model()
 

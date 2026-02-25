@@ -6,12 +6,27 @@ experiment specifications including model parameters, hyperparameter spaces,
 SLURM settings, and evaluation metrics.
 """
 
-from pathlib import Path
+from pathlib import Path, PosixPath, WindowsPath
 from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
+
+#Made change for error 1 on Feb 12
+# This ensures Path objects are converted to strings when saving to YAML.
+# Without this, yaml.dump() creates Python-specific tags like:
+#   !!python/object/apply:pathlib.PosixPath
+# which yaml.safe_load() cannot deserialize, causing the worker to crash.
+def _path_representer(dumper: yaml.Dumper, data: Path) -> yaml.Node:
+    """Convert Path objects to strings for YAML serialization."""
+    return dumper.represent_str(str(data))
+
+
+# Register representers for all Path types
+yaml.add_representer(Path, _path_representer)
+yaml.add_representer(PosixPath, _path_representer)
+yaml.add_representer(WindowsPath, _path_representer)
 
 class HyperparameterSpec(BaseModel):
     """Specification for a single hyperparameter's search space."""
@@ -101,7 +116,7 @@ class EvaluationConfig(BaseModel):
 class SlurmConfig(BaseModel):
     """Configuration for SLURM job submission."""
 
-    partition: str = Field("compute", description="SLURM partition name")
+    partition: Optional[str] = Field(None, description="SLURM partition name")
     time: str = Field("01:00:00", description="Time limit (HH:MM:SS)")
     memory: str = Field("4G", description="Memory per job")
     cpus_per_task: int = Field(1, ge=1, description="CPUs per task")
@@ -269,3 +284,4 @@ def load_config(path: Union[str, Path]) -> ExaTuneConfig:
         ExaTuneConfig instance
     """
     return ExaTuneConfig.from_yaml(path)
+
