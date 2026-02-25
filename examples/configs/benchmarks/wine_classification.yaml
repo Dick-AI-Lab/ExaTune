@@ -5,7 +5,8 @@
 
 experiment:
   name: "wine_gb_benchmark"
-  output_dir: "./results/benchmarks/wine_gb"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/wine_gb/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/wine_gb/results/config.yaml"
   description: "Gradient Boosting hyperparameter landscape on Wine dataset"
   tags:
     - "benchmark"
@@ -28,13 +29,13 @@ model:
 hyperparameters:
   n_estimators:
     type: "categorical"
-    values: [50, 100, 150, 200, 300]
+    values: [50, 150, 300]
   learning_rate:
     type: "categorical"
-    values: [0.001, 0.01, 0.05, 0.1, 0.2, 0.5]
+    values: [0.05, 0.1, 0.2, 0.5]
   max_depth:
     type: "categorical"
-    values: [1, 2, 3, 4, 5, 7]
+    values: [1, 3, 5, 7]
   min_samples_split:
     type: "categorical"
     values: [2, 5, 10, 20]
@@ -43,7 +44,7 @@ hyperparameters:
     values: [1, 2, 4, 8]
   subsample:
     type: "categorical"
-    values: [0.5, 0.7, 0.8, 0.9, 1.0]
+    values: [0.5, 0.75, 1.0]
 
 dataset:
   name: "wine"

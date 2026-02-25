@@ -5,8 +5,9 @@
 
 experiment:
   name: "digits_svm_benchmark"
-  output_dir: "./results/benchmarks/digits_svm"
   description: "SVM hyperparameter landscape on handwritten digits"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/digits_svm/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/digits_svm/results/config.yaml"
   tags:
     - "benchmark"
     - "classification"
@@ -59,11 +60,12 @@ evaluation:
   n_jobs: 1
 
 slurm:
-#  partition: "compute"
   time: "01:00:00"
   memory: "8G"
   cpus_per_task: 2
   nodes: 1
+  #adding ENV loading  
+  python_environment: "/scratch/klons06/Exatune/ENV"
   email_type: "FAIL"
   modules:
     - "gcc/11.3.0"
