@@ -217,7 +217,8 @@ class GridGenerator:
         for name, spec in self.specs.items():
             values = self.generate_values(spec)
             # Filter out None values for min/max calculation
-            numeric_values = [v for v in values if v is not None]
+	    #Change here to allow strings like "sqrt" and "log" to be accepted
+            numeric_values = [v for v in values if v is not None and isinstance(v, (int, float))]
             param_summaries[name] = {
                 "n_values": len(values),
                 "min": min(numeric_values) if numeric_values else None,
