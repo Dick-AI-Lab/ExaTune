@@ -33,10 +33,10 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "Breast Cancer dataset (569 samples, 2 classes) - XGBoost",
         "grid_size_estimate": 15120,  # 5 * 6 * 7 * 5 * 6 * 6 * 5 * 5 * 5
     },
-    "my_dataset": {
-        "pregnancy_outcome": "configs/benchmarks/pregnancy_outcome_calssification.yaml",
+"pregnancy_outcome": {
+        "config": "configs/benchmarks/pregnancy_outcome_calssification.yaml",
         "description": "My custom dataset - Random Forest",
-        "grid_size_estimate": 180,  
+        "grid_size_estimate": 180,
     },
 }
 
