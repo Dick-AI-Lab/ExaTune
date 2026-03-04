@@ -80,13 +80,21 @@ def main():
         default="./visualization_demo",
         help="Directory for output plots",
     )
+    # adding the reuslts path to the argument 
+    parser.add_argument(
+        "--results",
+        type=str,
+        required=True,
+        help="Path to results parquet file",
+    )
+    args = parser.parse_args()
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Creating synthetic results...")
-    results = pd.read_parquet("examples/results_clean.parquet")
+    results = pd.read_parquet(args.results)
     results.columns = [c.replace("hyperparameters.", "").replace("additional_metrics.", "") for c in results.columns]
     results = results.drop(columns=["cv_scores", "train_scores"], errors="ignore")
     print(f"  Generated {len(results)} configurations\n")
