@@ -142,6 +142,7 @@ def test_worker_components():
 
             # Check Parquet file was created
             parquet_file = output_dir / "results.parquet"
+            
             assert parquet_file.exists(), "Parquet file not created"
             print(f"✓ Saved result to {parquet_file}")
 
