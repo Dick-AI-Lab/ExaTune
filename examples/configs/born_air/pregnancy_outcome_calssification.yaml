@@ -4,10 +4,10 @@
 # Model: Random Forest Classifier
 
 experiment:
-  name: "pregnancy_outcome_rf_benchmark"
+  name: "pregnancy_outcome_xgb_benchmark"
   output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome/results"
   config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome/results/config.yaml"
-  description: "Random Forest hyperparameter landscape on pregnancy_outcome dataset"
+  description: "XGBoost hyperparameter landscape on pregnancy_outcome dataset"
   tags:
     - "benchmark"
     - "classification"
@@ -29,25 +29,25 @@ model:
 
 hyperparameters:
   n_estimators:
-    type: "categorical"
+    type: "int"
     values: [50, 100, 200, 300]
   max_depth:
-    type: "categorical"
-    values: [3, 5, 7,]
+    type: "int"
+    values: [3, 5, 7]
   learning_rate:
-    type: "categorical"
+    type: "float"
     values: [0.01,  0.1, 0.3]
   subsample:
-    type: "categorical"
+    type: "float"
     values: [0.6, 0.8, 1.0]
   colsample_bytree:
-    type: "categorical"
+    type: "float"
     values: [0.6, 0.8, 1.0]
   min_child_weight:
-    type: "categorical"
+    type: "int"
     values: [1, 3, 5, 7]
   gamma:
-    type: "categorical"
+    type: "float"
     values: [0, 0.1, 0.2, 0.3]
 
 dataset:
@@ -88,3 +88,4 @@ slurm:
 storage:
   backend: "parquet"
   compress: true
+

@@ -34,9 +34,9 @@ CLASSIFICATION_BENCHMARKS = {
         "grid_size_estimate": 15120,  # 5 * 6 * 7 * 5 * 6 * 6 * 5 * 5 * 5
     },
 "pregnancy_outcome": {
-        "config": "configs/benchmarks/pregnancy_outcome_calssification.yaml",
-        "description": "My custom dataset - Random Forest",
-        "grid_size_estimate": 180,
+        "config": "configs/born_air/pregnancy_outcome_calssification.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 5184,
     },
 }
 
