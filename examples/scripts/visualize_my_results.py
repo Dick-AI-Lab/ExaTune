@@ -115,7 +115,15 @@ def main():
         plot_surface,
         plot_train_vs_test,
     )
+#TODO look at the different results for all of the differnt metrics 
+    # - "f1_macro"
+    # - "f1_micro"
+    # - "f1_weighted"
+    # - "precision_macro"
+    # - "recall_macro"
+    # - "roc_auc_ovr"
 
+#! loop this correctly 
     plots = [
         ("Score Histogram", lambda: plot_score_histogram(results, output_path=output_dir / "histogram.png")),
         ("Score Violin (by max_depth)", lambda: plot_score_violin(results, group_by="max_depth", output_path=output_dir / "violin.png")),
@@ -123,7 +131,7 @@ def main():
         ("Slice: n_estimators", lambda: plot_slice(results, param="n_estimators", show_individual=True, output_path=output_dir / "slice_n_estimators.png")),
         ("All Slices", lambda: plot_all_slices(results, output_path=output_dir / "all_slices.png")),
         ("Conditional Slice", lambda: plot_conditional_slice(results, param="n_estimators", condition_param="max_depth", output_path=output_dir / "conditional_slice.png")),
-        ("Heatmap (n_estimators x max_depth)", lambda: plot_heatmap(results, x_param="n_estimators", y_param="max_depth", output_path=output_dir / "heatmap.png")),
+        ("Heatmap (n_estimators x max_depth)", lambda: plot_heatmap(results, x_param="n_estimators", y_param="max_depth", metric="f1_macro", output_path=output_dir / "heatmap_f1_macro.png")),
         ("3D Surface", lambda: plot_surface(results, x_param="n_estimators", y_param="max_depth", output_path=output_dir / "surface.png")),
         ("Contour Plot", lambda: plot_contour(results, x_param="n_estimators", y_param="max_depth", output_path=output_dir / "contour.png")),
         ("Parameter Importance (variance)", lambda: plot_importance(results, method="variance", output_path=output_dir / "importance_variance.png")),
