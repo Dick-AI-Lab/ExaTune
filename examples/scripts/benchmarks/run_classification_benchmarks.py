@@ -44,6 +44,11 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "My custom dataset - XGB from born air",
         "grid_size_estimate": 4680,
 },
+    "gestational_diabetes": {
+        "config": "configs/born_air/gestational_diabetes_classification_large_scale.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 4680,
+},
 }
 
 def run_benchmark(benchmark_name: str, submit: bool = False, dry_run: bool = False):
