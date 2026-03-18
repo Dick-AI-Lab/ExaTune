@@ -54,7 +54,7 @@ hyperparameters:
 dataset:
   name: "gestational_diabetes"
   path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/gestational_diabetes_imputed.csv"
-  target_column: "Outcome"
+  target_column: "Class Label(GDM /Non GDM)"
   test_size: 0.2
   random_state: 42
   stratify: true
@@ -71,6 +71,7 @@ evaluation:
     - "recall_macro"
     - "roc_auc_ovr"
   n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
+
 
 slurm:
   time: "00:30:00"
