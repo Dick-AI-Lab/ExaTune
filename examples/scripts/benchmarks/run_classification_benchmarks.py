@@ -38,13 +38,13 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "My custom dataset - XGB from born air",
         "grid_size_estimate": 5184,
     },
+
     "pregnancy_outcome_LS": {
         "config": "configs/born_air/pregnancy_outcome_calssification_large_scale.yaml",
         "description": "My custom dataset - XGB from born air",
         "grid_size_estimate": 4680,
-    },
+},
 }
-
 
 def run_benchmark(benchmark_name: str, submit: bool = False, dry_run: bool = False):
     """
