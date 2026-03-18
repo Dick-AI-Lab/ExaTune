@@ -4,9 +4,9 @@
 # Model: Random Forest Classifier
 
 experiment:
-  name: "pregnancy_outcome_rf_benchmark"
-  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome/results"
-  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome/results/config.yaml"
+  name: "pregnancy_outcome_ls_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome_ls/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/pregnancy_outcome_ls/results/config.yaml"
   description: "Random Forest hyperparameter landscape on pregnancy_outcome dataset"
   tags:
     - "benchmark"
