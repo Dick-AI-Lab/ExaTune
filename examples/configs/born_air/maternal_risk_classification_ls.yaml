@@ -1,0 +1,92 @@
+# ExaTune Configuration: Gestational Diabetes
+# Dataset: 
+# Task: Multi-class classification
+# Model: Random Forest Classifier
+
+experiment:
+  name: "Maternal_Risk_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/maternal_risk/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/maternal_risk/results/config.yaml"
+  description: "Random Forest hyperparameter landscape on maternal_risk dataset"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "maternal_risk"
+    - "sklearn"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "xgboost"
+  class: "XGBClassifier"
+  task: "classification"
+  fixed_params:
+    objective: "binary:logistic"
+    eval_metric: "logloss"
+    use_label_encoder: false
+
+
+hyperparameters:
+  n_estimators:
+    type: "int"
+    values: [25, 50,75, 100,125, 150, 175, 200, 225, 250, 275, 300]
+  max_depth:
+    type: "int"
+    values: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  learning_rate:
+    type: "float"
+    values: [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2, 0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.28, 0.29, 0.3]
+  subsample:
+    type: "float"
+    values: [1.0]
+  colsample_bytree:
+    type: "float"
+    values: [1.0]
+  min_child_weight:
+    type: "int"
+    values: [1]
+  gamma:
+    type: "int"
+    values: [0]
+
+dataset:
+  name: "maternal_risk"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/Maternal_Risk_imputed.csv"
+  target_column: "RiskLevel"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+    - "roc_auc_ovr"
+  n_jobs: 1  # Per-job parallelism (set to 1 for SLURM)
+
+
+slurm:
+  time: "00:30:00"
+  memory: "4G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  #adding ENV loading  
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true
