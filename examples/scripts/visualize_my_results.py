@@ -85,11 +85,17 @@ def main():
 
         per_metric_plots = [
             (f"Score Histogram ({metric})",
-             lambda m=metric, d=metric_dir: plot_score_histogram(results, metric=m, output_path=d / "histogram.png")),
+            lambda m=metric, d=metric_dir: plot_score_histogram(results, metric=m, output_path=d / "histogram.png")),
             (f"Score Violin by max_depth ({metric})",
-             lambda m=metric, d=metric_dir: plot_score_violin(results, group_by="max_depth", metric=m, output_path=d / "violin.png")),
+            lambda m=metric, d=metric_dir: plot_score_violin(results, group_by="max_depth", metric=m, output_path=d / "violin.png")),
             (f"Heatmap n_estimators x max_depth ({metric})",
-             lambda m=metric, d=metric_dir: plot_heatmap(results, x_param="n_estimators", y_param="max_depth", metric=m, output_path=d / "heatmap.png")),
+            lambda m=metric, d=metric_dir: plot_heatmap(results, x_param="n_estimators", y_param="max_depth", metric=m, output_path=d / "heatmap.png")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface(results, x_param="n_estimators", y_param="max_depth", metric=m, output_path=d / "surface_n_m.png")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface(results, x_param="learning_rate", y_param="max_depth", metric=m, output_path=d / "surface_lr_m.png")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface(results, x_param="n_estimators", y_param="learning_rate", metric=m, output_path=d / "surface_n_lr.png")),
         ]
 
         for name, plot_func in per_metric_plots:
