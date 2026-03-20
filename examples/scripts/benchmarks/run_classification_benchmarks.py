@@ -55,6 +55,12 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "My custom dataset - XGB from born air",
         "grid_size_estimate": 4680,
 },
+    "titanic": {
+        
+        "config": "configs/neurips/titanic_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 4680,
+},
 }
 
 def run_benchmark(benchmark_name: str, submit: bool = False, dry_run: bool = False):
