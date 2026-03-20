@@ -59,7 +59,7 @@ CLASSIFICATION_BENCHMARKS = {
         
         "config": "configs/neurips/titanic_classification.yaml",
         "description": "My custom dataset - XGB from born air",
-        "grid_size_estimate": 4680,
+        "grid_size_estimate": 505440,
 },
 }
 
