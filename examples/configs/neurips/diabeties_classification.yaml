@@ -1,0 +1,71 @@
+# ExaTune Configuration: Diabetes
+# Dataset: Diabetes (sklearn built-in)
+# Task: Regression
+# Model: Ridge Regression
+
+experiment:
+  name: "diabetes_ridge_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/diabetes/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/diabetes/results/config.yaml"
+  description: "Ridge Regression hyperparameter landscape on Diabetes dataset"
+  tags:
+    - "benchmark"
+    - "regression"
+    - "diabetes"
+    - "sklearn"
+    - "ridge"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "sklearn"
+  class: "Ridge"
+  task: "regression"
+  fixed_params: {}
+
+hyperparameters:
+  alpha:
+    type: "float"
+    values: [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0] # 10
+  fit_intercept:
+    type: "bool"
+    values: [true, false] # 2
+  solver:
+    type: "categorical"
+    values: ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"] # 7
+
+dataset:
+  name: "diabetes"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/diabetes.csv"
+  target_column: "target"
+  test_size: 0.2
+  random_state: 42
+  stratify: false
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "kfold"
+  scoring: "r2"
+  additional_metrics:
+    - "neg_mean_squared_error"
+    - "neg_mean_absolute_error"
+    - "neg_root_mean_squared_error"
+  n_jobs: 1
+
+slurm:
+  time: "00:10:00"
+  memory: "2G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true
