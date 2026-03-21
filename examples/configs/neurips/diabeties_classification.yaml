@@ -55,7 +55,7 @@ hyperparameters:
 dataset:
   name: "diabetes"
   path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/diabetes.csv"
-  target_column: "target"
+  target_column: "Outcome"
   test_size: 0.2
   random_state: 42
   stratify: false
