@@ -73,7 +73,7 @@ CLASSIFICATION_BENCHMARKS = {
 "wine": {
         "config": "configs/neurips/wine_classification.yaml",
         "description": "My custom dataset - XGB from born air",
-    "grid_size_estimate": 900,
+    "grid_size_estimate": 32000,
 
 },
 }
