@@ -1,0 +1,81 @@
+# ExaTune Configuration: Wine
+# Dataset: Wine (sklearn built-in)
+# Task: Multi-class classification
+# Model: KNN Classifier
+
+experiment:
+  name: "wine_knn_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/wine/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/wine/results/config.yaml"
+  description: "KNN hyperparameter landscape on Wine dataset"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "wine"
+    - "sklearn"
+    - "knn"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "sklearn"
+  class: "KNeighborsClassifier"
+  task: "classification"
+  fixed_params: {}
+
+hyperparameters:
+  n_neighbors:
+    type: "int"
+    values: [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+    ] # 20 (increments of 1)
+  weights:
+    type: "categorical"
+    values: ["uniform", "distance", "manhattan_weighted", "gaussian", "rank"] # 5
+  metric:
+    type: "categorical"
+    values: ["euclidean", "manhattan", "minkowski"] # 3
+  p:
+    type: "int"
+    values: [1, 2, 3] # 3 (minkowski power parameter)
+
+dataset:
+  name: "wine"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/wine.csv"
+  target_column: "target"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+    - "roc_auc_ovr"
+  n_jobs: 1
+
+slurm:
+  time: "00:30:00"
+  memory: "4G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true

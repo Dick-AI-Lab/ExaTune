@@ -23,11 +23,7 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "Digits dataset (1797 samples, 10 classes) - SVM",
         "grid_size_estimate": 480,  # 5 * 4 * 6 * 4
     },
-    "wine": {
-        "config": "configs/benchmarks/wine_classification.yaml",
-        "description": "Wine dataset (178 samples, 3 classes) - Gradient Boosting",
-        "grid_size_estimate": 720,  # 5 * 6 * 6 * 4 * 4 * 5
-    },
+
     "breast_cancer": {
         "config": "configs/benchmarks/breast_cancer_classification.yaml",
         "description": "Breast Cancer dataset (569 samples, 2 classes) - XGBoost",
@@ -72,6 +68,12 @@ CLASSIFICATION_BENCHMARKS = {
         "config": "configs/neurips/housing_classification.yaml",
         "description": "My custom dataset - XGB from born air",
     "grid_size_estimate": 8316,
+
+},
+"wine": {
+        "config": "configs/neurips/wine_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 900,
 
 },
 }
