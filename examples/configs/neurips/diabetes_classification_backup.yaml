@@ -1,0 +1,85 @@
+# ExaTune Configuration: Diabetes
+# Dataset: Diabetes (sklearn built-in)
+# Task: Regression
+# Model: Ridge Regression
+
+experiment:
+  name: "diabetes_ridge_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/diabetes/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/diabetes/results/config.yaml"
+  description: "Ridge Regression hyperparameter landscape on Diabetes dataset"
+  tags:
+    - "benchmark"
+    - "regression"
+    - "diabetes"
+    - "sklearn"
+    - "ridge"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 50
+
+model:
+  type: "sklearn"
+  class: "Ridge"
+  task: "regression"
+  fixed_params: {}
+
+hyperparameters:
+  alpha:
+    type: "float"
+    values: [
+      0.15, 0.30, 0.45, 0.60, 0.75, 0.90,
+      1.05, 1.20, 1.35, 1.50, 1.65, 1.80, 1.95,
+      2.10, 2.25, 2.40, 2.55, 2.70, 2.85, 3.00,
+      3.15, 3.30, 3.45, 3.60, 3.75, 3.90,
+      4.05, 4.20, 4.35, 4.50, 4.65, 4.80, 4.95,
+      5.10, 5.25, 5.40, 5.55, 5.70, 5.85, 6.00,
+      6.15, 6.30, 6.45, 6.60, 6.75, 6.90,
+      7.05, 7.20, 7.35, 7.50, 7.65, 7.80, 7.95,
+      8.10, 8.25, 8.40, 8.55, 8.70, 8.85, 9.00,
+      9.15, 9.30, 9.45, 9.60, 9.75, 9.90
+    ] # 66
+  tol:
+    type: "float"
+    values: [0.0001, 0.001, 0.01] # 3
+  max_iter:
+    type: "int"
+    values: [100, 300, 500] # 3
+  solver:
+    type: "categorical"
+    values: ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"] # 7
+
+dataset:
+  name: "diabetes"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/diabetes.csv"
+  target_column: "Outcome"
+  test_size: 0.2
+  random_state: 42
+  stratify: false
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "kfold"
+  scoring: "r2"
+  additional_metrics:
+    - "neg_mean_squared_error"
+    - "neg_mean_absolute_error"
+    - "neg_root_mean_squared_error"
+  n_jobs: 1
+
+slurm:
+  time: "00:10:00"
+  memory: "2G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true
