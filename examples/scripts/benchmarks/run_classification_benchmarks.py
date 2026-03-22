@@ -65,13 +65,14 @@ CLASSIFICATION_BENCHMARKS = {
         
         "config": "configs/neurips/diabetes_classification.yaml",
         "description": "My custom dataset - XGB from born air",
-        "grid_size_estimate": 140,
+        "grid_size_estimate": 8316,
 },    
 "housing": {
         
         "config": "configs/neurips/housing_classification.yaml",
         "description": "My custom dataset - XGB from born air",
-        "grid_size_estimate": 500,
+    "grid_size_estimate": 8316,
+
 },
 }
 

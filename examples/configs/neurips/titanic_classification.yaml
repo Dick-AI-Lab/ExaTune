@@ -70,16 +70,16 @@ hyperparameters:
       ] # 30
   subsample:
     type: "float"
-    values: [ 0.7, 0.8, 1.0] # 4
+    values: [1.0] # 4
   colsample_bytree:
     type: "float"
-    values: [ 0.7, 0.8, 1.0] # 4
+    values: [1.0] # 4
   min_child_weight:
     type: "int"
     values: [1,3, 5, 7] # 4
   gamma:
     type: "float"
-    values: [0, 0.1, 0.2] # 4
+    values: [0] # 4
 
 # hyperparameters:
 #   n_estimators:
