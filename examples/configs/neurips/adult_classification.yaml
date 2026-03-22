@@ -1,0 +1,81 @@
+# ExaTune Configuration: UCI Adult
+# Dataset: UCI Adult Income
+# Task: Binary classification
+# Model: Random Forest Classifier
+
+experiment:
+  name: "adult_rf_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/adult/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/adult/results/config.yaml"
+  description: "Random Forest hyperparameter landscape on UCI Adult Income dataset"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "binary"
+    - "adult"
+    - "sklearn"
+    - "random_forest"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"
+  class: "RandomForestClassifier"
+  task: "classification"
+  fixed_params:
+    criterion: "gini"
+
+hyperparameters:
+  n_estimators:
+    type: "int"
+    values: [10, 50, 100, 200, 300] # 5
+  max_depth:
+    type: "int"
+    values: [3, 5, 10, 15, 20] # 5 (removed null)
+  min_samples_split:
+    type: "int"
+    values: [2, 5, 10, 20] # 4
+  min_samples_leaf:
+    type: "int"
+    values: [1, 2, 4, 8] # 4
+  max_features:
+    type: "categorical"
+    values: ["sqrt", "log2"] # 2 (removed null)
+
+dataset:
+  name: "adult"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/adult.csv"
+  target_column: "income"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+  n_jobs: 1
+
+slurm:
+  time: "02:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true

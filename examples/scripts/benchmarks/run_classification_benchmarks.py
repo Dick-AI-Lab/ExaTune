@@ -76,6 +76,12 @@ CLASSIFICATION_BENCHMARKS = {
     "grid_size_estimate": 32000,
 
 },
+"adult": {
+        "config": "configs/neurips/adult_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 900,
+
+},
 }
 
 def run_benchmark(benchmark_name: str, submit: bool = False, dry_run: bool = False):
