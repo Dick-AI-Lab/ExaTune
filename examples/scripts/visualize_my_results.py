@@ -21,6 +21,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# Remove or keep the old one if still used elsewhere:
+# from exatune.visualization import plot_surface
+from exatune.visualization.landscape_3d import plot_surface_plotly
 
 def main():
     parser = argparse.ArgumentParser(description="ExaTune Visualization Demo")
@@ -62,6 +65,8 @@ def main():
         plot_slice,
         plot_surface,
         plot_train_vs_test,
+       
+        
     )
 
     # Columns in the parquet are stored as e.g. "f1_macro.mean" after flattening.
@@ -96,6 +101,12 @@ def main():
             lambda m=metric, d=metric_dir: plot_surface(results, x_param="learning_rate", y_param="max_depth", metric=m, output_path=d / "surface_lr_m.png")),
             (f"3D Surface ({metric})",
             lambda m=metric, d=metric_dir: plot_surface(results, x_param="n_estimators", y_param="learning_rate", metric=m, output_path=d / "surface_n_lr.png")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface_plotly(results, x_param="n_estimators", y_param="max_depth", metric=m, output_path=d / "surface_n_estimators_x_max_depth.html")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface_plotly(results, x_param="learning_rate", y_param="max_depth", metric=m, output_path=d / "surface_learning_rate_x_max_depth.html")),
+            (f"3D Surface ({metric})",
+            lambda m=metric, d=metric_dir: plot_surface_plotly(results, x_param="n_estimators", y_param="learning_rate", metric=m, output_path=d / "surface_n_estimators_x_learning_rate.html")),
         ]
 
         for name, plot_func in per_metric_plots:
