@@ -80,7 +80,7 @@ hyperparameters:
   gamma:
     type: "float"
     values: [0] # 4
-
+examples\parquet\parquet_neurips
 # hyperparameters:
 #   n_estimators:
 #     type: "int"
