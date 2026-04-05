@@ -61,9 +61,21 @@ def load_dataset(config: ExaTuneConfig) -> tuple:
         # Load from CSV
         if dataset_path.suffix == ".csv":
             df = pd.read_csv(dataset_path)
+            y = df[config.dataset.target_column].values
+            X = df.drop(columns=[config.dataset.target_column]).values
+            return X, y
         # Load from Parquet
         elif dataset_path.suffix == ".parquet":
             df = pd.read_parquet(dataset_path)
+            y = df[config.dataset.target_column].values
+            X = df.drop(columns=[config.dataset.target_column]).values
+            return X, y
+        # Load from NPZ (e.g. MNIST)
+        elif dataset_path.suffix == ".npz":
+            data = np.load(dataset_path)
+            X = data['x_train'].reshape(-1, 784).astype('float32') / 255.0
+            y = data['y_train']
+            return X, y
         else:
             raise ValueError(f"Unsupported file format: {dataset_path.suffix}")
 
