@@ -75,6 +75,11 @@ def load_dataset(config: ExaTuneConfig) -> tuple:
                 )
             y = df[config.dataset.target_column].values
             X = df.drop(columns=[config.dataset.target_column]).values
+
+            # Encode string labels to integers (required for XGBoost)
+            if y.dtype == object:
+                from sklearn.preprocessing import LabelEncoder
+                y = LabelEncoder().fit_transform(y)
         else:
             raise ValueError("target_column must be specified for custom datasets")
 
