@@ -1,0 +1,72 @@
+# ExaTune Configuration: MNIST SVM
+# Dataset: MNIST Handwritten Digits
+# Task: Multi-class classification
+# Model: Support Vector Machine
+
+experiment:
+  name: "mnist_svm_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/mnist/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/mnist/results/config.yaml"
+  description: "SVM hyperparameter landscape on MNIST dataset varying C and gamma"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "mnist"
+    - "sklearn"
+    - "svm"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"
+  class: "SVC"
+  task: "classification"
+  fixed_params:
+    kernel: "rbf"
+
+hyperparameters:
+  C:
+    type: "float"
+    values: [0.01, 0.1, 1, 10, 100]
+  gamma:
+    type: "categorical"
+    values: [0.001, 0.01, 0.1, "scale", "auto"]
+
+dataset:
+  name: "mnist"
+  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/mnist.npz"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+  target_column: "y"
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+  n_jobs: 1
+
+slurm:
+  time: "02:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true
