@@ -28,12 +28,11 @@ model:
 
 hyperparameters:
   C:
-    type: "float"
-    values: [0.01, 100]
+    type: "categorical"
+    values: [0.01, 0.1, 1, 10, 100]
   gamma:
-    type: "float"
-    values: [0.001, 0.1]
-
+    type: "categorical"
+    values: [0.001, 0.01, 0.1, 1]
 dataset:
   name: "mnist"
   path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/mnist.npz"
@@ -55,7 +54,7 @@ evaluation:
   n_jobs: 1
 
 slurm:
-  time: "02:00:00"
+  time: "06:00:00"
   memory: "8G"
   cpus_per_task: 2
   nodes: 1
