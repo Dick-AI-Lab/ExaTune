@@ -12,5 +12,6 @@ if(args.new_path):
     to_csv = df.to_csv(args.new_path)
 
 print(df.head())
+print(df['config_hash'].head())
 print(df.columns.tolist())
 print( df.dtypes)

@@ -1,410 +1,312 @@
-"""Landscape visualization: 2D heatmaps, 3D surface plots, and contour plots.
+#!/usr/bin/env python3
+"""Demonstrate all ExaTune visualization functions using actual experiment results.
 
-These plots show performance metric values over two hyperparameter dimensions,
-providing direct insight into the shape of the hyperparameter landscape.
+Hyperparameters and metrics are read directly from the experiment YAML config,
+so nothing is hardcoded — the script adapts to whichever experiment you point it at.
+
+Usage:
+    python examples/scripts/visualize_results.py \
+        --results path/to/results.parquet \
+        --config path/to/experiment.yaml \
+        [--output-dir OUTPUT_DIR]
 """
 
+import argparse
+import itertools
 from pathlib import Path
-from typing import Optional, Tuple, Union
 
 import matplotlib
+matplotlib.use("Agg")  # Non-interactive backend
+
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-
-from exatune.visualization._utils import (
-    get_default_colormap,
-    get_figure_and_axes,
-    get_metric_column,
-    pivot_for_heatmap,
-    save_figure,
-    validate_results_dataframe,
-)
-
-# Default hyperparameter values to mark on plots
-_DEFAULTS = {
-    "learning_rate": 0.3,
-    "n_estimators": 100,
-    "max_depth": 6,
-}
+import yaml
 
 
-def _find_default_index(labels: list, param: str) -> Optional[float]:
-    """Return the axis index (float) corresponding to the default value for a
-    parameter, or None if the parameter has no registered default or the
-    default value is not present among the plotted labels."""
-    default_val = _DEFAULTS.get(param)
-    if default_val is None:
-        return None
-    str_labels = [str(v) for v in labels]
-    target = str(default_val)
-    # Try exact string match first
-    if target in str_labels:
-        return float(str_labels.index(target))
-    # Try numeric comparison in case of float formatting differences
-    try:
-        numeric_labels = [float(v) for v in str_labels]
-        numeric_target = float(default_val)
-        for i, v in enumerate(numeric_labels):
-            if abs(v - numeric_target) < 1e-9:
-                return float(i)
-    except (ValueError, TypeError):
-        pass
-    return None
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def load_yaml_config(config_path: Path) -> dict:
+    """Load raw YAML config (no Pydantic needed)."""
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
 
 
-def plot_heatmap(
-    df: pd.DataFrame,
-    x_param: str,
-    y_param: str,
-    metric: str = "mean_score",
-    agg_func: str = "mean",
-    title: Optional[str] = None,
-    cmap: Optional[str] = None,
-    annotate: bool = True,
-    figsize: Tuple[float, float] = (10, 8),
-    output_path: Optional[Union[str, Path]] = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
-) -> matplotlib.figure.Figure:
-    """Plot a 2D heatmap of metric values over two hyperparameters.
+def extract_hyperparameter_names(config: dict) -> list[str]:
+    """Return the list of hyperparameter names defined in the YAML."""
+    return list(config.get("hyperparameters", {}).keys())
 
-    When more than two hyperparameters exist, non-displayed parameters
-    are aggregated using agg_func.
 
-    A star marker (★) is drawn at the cell with the highest metric value.
-    A diamond marker (◆) is drawn at the cell corresponding to the default
-    hyperparameters (learning_rate=0.3, n_estimators=100, max_depth=6),
-    if those parameters are among the axes being plotted.
-
-    Args:
-        df: Results DataFrame from collect_results().
-        x_param: Hyperparameter for x-axis.
-        y_param: Hyperparameter for y-axis.
-        metric: Metric column name or shorthand.
-        agg_func: Aggregation for extra dimensions ('mean', 'max', 'min', 'std').
-        title: Plot title (auto-generated if None).
-        cmap: Matplotlib colormap name.
-        annotate: Whether to show values in cells.
-        figsize: Figure size in inches.
-        output_path: Optional file path to save figure.
-        ax: Optional existing Axes for multi-panel layouts.
-
-    Returns:
-        matplotlib Figure object.
+def extract_metrics(config: dict) -> tuple[str, list[str]]:
     """
-    filtered = validate_results_dataframe(df, param_columns=[x_param, y_param], metric=metric)
-    metric_col = get_metric_column(filtered, metric)
+    Return (primary_metric, all_metrics) derived from the evaluation section.
 
-    pivot = pivot_for_heatmap(filtered, x_param, y_param, metric_col, agg_func)
+    Parquet columns use the '.mean' suffix after flattening, so we append it here.
+    The primary metric is evaluation.scoring; additional_metrics are appended after.
+    """
+    evaluation = config.get("evaluation", {})
+    primary_raw = evaluation.get("scoring", "accuracy")
+    additional_raw = evaluation.get("additional_metrics", [])
 
-    if cmap is None:
-        cmap = get_default_colormap()
+    # Parquet columns are stored as e.g. "f1_macro.mean" after json_normalize flattening.
+    # The primary scoring metric is stored directly as "mean_score", but additional
+    # metrics are stored as "<metric>.mean". We handle both.
+    primary_col = "mean_score"  # always present regardless of scoring name
+    additional_cols = [f"{m}.mean" for m in additional_raw]
 
-    fig, ax = get_figure_and_axes(ax, figsize)
+    all_metrics = [primary_col] + additional_cols
+    return primary_col, all_metrics, primary_raw
 
-    im = ax.imshow(
-        pivot.values,
-        cmap=cmap,
-        aspect="auto",
-        origin="lower",
+
+def generate_param_pairs(param_names: list[str]) -> list[tuple[str, str]]:
+    """Return all unique (x, y) pairs for surface/contour/heatmap plots."""
+    return list(itertools.combinations(param_names, 2))
+
+
+def safe_plot(name: str, func):
+    """Run a plot function, catch and report errors without aborting."""
+    try:
+        print(f"  Generating: {name}...")
+        func()
+        plt.close("all")
+    except Exception as e:
+        print(f"    ERROR in '{name}': {e}")
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="ExaTune Visualization — driven by experiment YAML config"
+    )
+    parser.add_argument(
+        "--results",
+        type=str,
+        required=True,
+        help="Path to results parquet file",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=True,
+        help="Path to experiment YAML config (used to read hyperparameter names and metrics)",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="./visualization_output",
+        help="Directory for output plots (default: ./visualization_output)",
+    )
+    args = parser.parse_args()
+
+    results_path = Path(args.results)
+    config_path = Path(args.config)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # ------------------------------------------------------------------
+    # 1. Load config and derive parameters / metrics
+    # ------------------------------------------------------------------
+    print(f"Loading config from: {config_path}")
+    config = load_yaml_config(config_path)
+
+    param_names = extract_hyperparameter_names(config)
+    primary_metric, all_metrics, primary_raw = extract_metrics(config)
+    param_pairs = generate_param_pairs(param_names)
+
+    print(f"  Hyperparameters ({len(param_names)}): {', '.join(param_names)}")
+    print(f"  Primary metric column : {primary_metric}  (scoring = '{primary_raw}')")
+    print(f"  Additional metric cols : {', '.join(all_metrics[1:]) if all_metrics[1:] else 'none'}")
+    print(f"  Parameter pairs for 2D plots: {len(param_pairs)}\n")
+
+    # ------------------------------------------------------------------
+    # 2. Load results and clean column names
+    # ------------------------------------------------------------------
+    print(f"Loading results from: {results_path}")
+    results = pd.read_parquet(results_path)
+
+    # Strip dot-notation prefixes added by json_normalize
+    results.columns = [
+        c.replace("hyperparameters.", "").replace("additional_metrics.", "")
+        for c in results.columns
+    ]
+    # Drop array-valued columns that break groupby
+    results = results.drop(columns=["cv_scores", "train_scores"], errors="ignore")
+
+    print(f"  Loaded {len(results)} configurations")
+    print(f"  Columns: {list(results.columns)}\n")
+
+    # Warn about any expected metric columns that are missing
+    missing = [m for m in all_metrics if m not in results.columns]
+    if missing:
+        print(f"  WARNING: These metric columns were not found and will be skipped: {missing}")
+        all_metrics = [m for m in all_metrics if m in results.columns]
+        if primary_metric not in results.columns:
+            # Fall back to the first available metric
+            primary_metric = all_metrics[0] if all_metrics else None
+
+    # ------------------------------------------------------------------
+    # 3. Import visualization functions
+    # ------------------------------------------------------------------
+    from exatune.visualization import (
+        plot_all_slices,
+        plot_conditional_slice,
+        plot_contour,
+        plot_dashboard,
+        plot_heatmap,
+        plot_importance,
+        plot_interaction_heatmap,
+        plot_parallel_coordinates,
+        plot_score_histogram,
+        plot_score_violin,
+        plot_slice,
+        plot_surface,
+        plot_train_vs_test,
+    )
+    from exatune.visualization.landscape_3d import plot_surface_plotly
+
+    # ------------------------------------------------------------------
+    # 4. Per-metric plots (histogram, violin, heatmap, surfaces)
+    # ------------------------------------------------------------------
+    print("Generating per-metric plots...")
+    for metric in all_metrics:
+        # Use the part before ".mean" as the folder name (e.g. "f1_macro")
+        # primary metric "mean_score" gets its own folder too
+        folder_name = metric.replace(".mean", "")
+        metric_dir = output_dir / folder_name
+        metric_dir.mkdir(exist_ok=True)
+
+        safe_plot(
+            f"Score Histogram ({metric})",
+            lambda m=metric, d=metric_dir: plot_score_histogram(
+                results, metric=m, output_path=d / "histogram.png"
+            ),
+        )
+
+        # Violin — use first param as grouping axis (usually the most important one)
+        if param_names:
+            group_param = param_names[0]
+            safe_plot(
+                f"Score Violin by {group_param} ({metric})",
+                lambda m=metric, d=metric_dir, p=group_param: plot_score_violin(
+                    results, group_by=p, metric=m, output_path=d / "violin.png"
+                ),
+            )
+
+        # Heatmap, static surface, and Plotly surface for every param pair
+        for x_param, y_param in param_pairs:
+            pair_label = f"{x_param}_x_{y_param}"
+
+            safe_plot(
+                f"Heatmap {x_param} x {y_param} ({metric})",
+                lambda m=metric, d=metric_dir, x=x_param, y=y_param, lbl=pair_label: plot_heatmap(
+                    results, x_param=x, y_param=y, metric=m,
+                    output_path=d / f"heatmap_{lbl}.png"
+                ),
+            )
+
+            safe_plot(
+                f"3D Surface {x_param} x {y_param} ({metric})",
+                lambda m=metric, d=metric_dir, x=x_param, y=y_param, lbl=pair_label: plot_surface(
+                    results, x_param=x, y_param=y, metric=m,
+                    output_path=d / f"surface_{lbl}.png"
+                ),
+            )
+
+            safe_plot(
+                f"3D Surface Plotly {x_param} x {y_param} ({metric})",
+                lambda m=metric, d=metric_dir, x=x_param, y=y_param, lbl=pair_label: plot_surface_plotly(
+                    results, x_param=x, y_param=y, metric=m,
+                    output_path=d / f"surface_{lbl}.html"
+                ),
+            )
+
+    # ------------------------------------------------------------------
+    # 5. Single structural plots (run once with primary metric)
+    # ------------------------------------------------------------------
+    print(f"\nGenerating structural plots (primary metric: {primary_metric})...")
+
+    safe_plot(
+        "Train vs Test Scatter",
+        lambda: plot_train_vs_test(results, output_path=output_dir / "train_vs_test.png"),
     )
 
-    # Set tick labels
-    ax.set_xticks(range(len(pivot.columns)))
-    ax.set_xticklabels([str(v) for v in pivot.columns], rotation=45, ha="right")
-    ax.set_yticks(range(len(pivot.index)))
-    ax.set_yticklabels([str(v) for v in pivot.index])
-
-    ax.set_xlabel(x_param)
-    ax.set_ylabel(y_param)
-
-    # Annotate cells
-    if annotate and pivot.size <= 200:
-        for i in range(len(pivot.index)):
-            for j in range(len(pivot.columns)):
-                val = pivot.iloc[i, j]
-                if pd.notna(val):
-                    text_color = "white" if val < pivot.values[~np.isnan(pivot.values)].mean() else "black"
-                    ax.text(j, i, f"{val:.3f}", ha="center", va="center", color=text_color, fontsize=8)
-
-    fig.colorbar(im, ax=ax, label=metric_col)
-
-    # --- Peak marker (gold star) ---
-    values = pivot.values.astype(float)
-    if not np.all(np.isnan(values)):
-        peak_idx = np.unravel_index(np.nanargmax(values), values.shape)
-        peak_row, peak_col = peak_idx  # row=y-axis, col=x-axis
-        ax.plot(
-            peak_col, peak_row,
-            marker=".", markersize=30, color="black",
-            markeredgecolor="black", markeredgewidth=0.8,
-            label=f"Peak ({pivot.index[peak_row]}, {pivot.columns[peak_col]})",
-            zorder=5,
+    # Per-parameter slice plots
+    for param in param_names:
+        safe_plot(
+            f"Slice: {param}",
+            lambda p=param: plot_slice(
+                results, param=p, show_individual=True,
+                output_path=output_dir / f"slice_{p}.png"
+            ),
         )
 
-    # --- Default parameters marker (red diamond) ---
-    default_x = _find_default_index(list(pivot.columns), x_param)
-    default_y = _find_default_index(list(pivot.index), y_param)
-    if default_x is not None and default_y is not None:
-        ax.plot(
-            default_x, default_y,
-            marker=".", markersize=30, color="red",
-            markeredgecolor="black", markeredgewidth=0.8,
-            label=f"Defaults ({_DEFAULTS.get(x_param)}, {_DEFAULTS.get(y_param)})",
-            zorder=5,
+    safe_plot(
+        "All Slices",
+        lambda: plot_all_slices(results, output_path=output_dir / "all_slices.png"),
+    )
+
+    # Conditional slice — first param conditioned on second param (if ≥2 exist)
+    if len(param_names) >= 2:
+        safe_plot(
+            f"Conditional Slice: {param_names[0]} | {param_names[1]}",
+            lambda: plot_conditional_slice(
+                results,
+                param=param_names[0],
+                condition_param=param_names[1],
+                output_path=output_dir / f"conditional_slice_{param_names[0]}_by_{param_names[1]}.png",
+            ),
         )
 
-    ax.legend(loc="upper left", fontsize=8, framealpha=0.7)
-
-    if title is None:
-        title = f"{metric_col} by {x_param} vs {y_param} ({agg_func})"
-    ax.set_title(title)
-
-    fig.tight_layout()
-    save_figure(fig, output_path)
-    return fig
-
-
-def plot_surface(
-    df: pd.DataFrame,
-    x_param: str,
-    y_param: str,
-    metric: str = "mean_score",
-    agg_func: str = "mean",
-    title: Optional[str] = None,
-    cmap: Optional[str] = None,
-    figsize: Tuple[float, float] = (12, 9),
-    elev: float = 30.0,
-    azim: float = -60.0,
-    output_path: Optional[Union[str, Path]] = None,
-) -> matplotlib.figure.Figure:
-    """Plot a 3D surface of metric values over two hyperparameters.
-
-    A gold star is plotted above the peak metric cell and a red diamond above
-    the default hyperparameter cell (learning_rate=0.3, n_estimators=100,
-    max_depth=6), where applicable.
-
-    Args:
-        df: Results DataFrame.
-        x_param: Hyperparameter for x-axis.
-        y_param: Hyperparameter for y-axis.
-        metric: Metric to plot on z-axis.
-        agg_func: Aggregation function for extra dimensions.
-        title: Plot title.
-        cmap: Colormap.
-        figsize: Figure size.
-        elev: Camera elevation angle.
-        azim: Camera azimuth angle.
-        output_path: Optional save path.
-
-    Returns:
-        matplotlib Figure.
-    """
-    filtered = validate_results_dataframe(df, param_columns=[x_param, y_param], metric=metric)
-    metric_col = get_metric_column(filtered, metric)
-
-    pivot = pivot_for_heatmap(filtered, x_param, y_param, metric_col, agg_func)
-
-    if cmap is None:
-        cmap = get_default_colormap()
-
-    fig, ax = get_figure_and_axes(figsize=figsize, projection="3d")
-
-    # Create meshgrid from pivot table indices
-    x_vals = np.arange(len(pivot.columns))
-    y_vals = np.arange(len(pivot.index))
-    X, Y = np.meshgrid(x_vals, y_vals)
-    Z = pivot.values.astype(float)
-
-    # Fill NaN with interpolation or nearest for surface rendering
-    mask = np.isnan(Z)
-    if mask.any() and not mask.all():
-        from scipy.interpolate import griddata
-
-        valid = ~mask
-        points = np.array(np.where(valid)).T
-        values = Z[valid]
-        fill_points = np.array(np.where(mask)).T
-        if len(fill_points) > 0 and len(points) > 0:
-            filled = griddata(points, values, fill_points, method="nearest")
-            Z[mask] = filled
-
-    surf = ax.plot_surface(X, Y, Z, cmap=cmap, alpha=0.9, edgecolor="none")
-
-    ax.set_xticks(x_vals)
-    ax.set_xticklabels([str(v) for v in pivot.columns], rotation=45, fontsize=7)
-    ax.set_yticks(y_vals)
-    ax.set_yticklabels([str(v) for v in pivot.index], fontsize=7)
-
-    ax.set_xlabel(x_param)
-    ax.set_ylabel(y_param)
-    ax.set_zlabel(metric_col)
-    ax.view_init(elev=elev, azim=azim)
-
-    fig.colorbar(surf, ax=ax, shrink=0.5, label=metric_col)
-
-    # Keep a clean copy of the original (pre-NaN-fill) values for marker placement
-    z_orig = pivot.values.astype(float)
-    z_range = np.nanmax(z_orig) - np.nanmin(z_orig)
-    # Raise markers well above the surface so they are never obscured by it
-    z_offset = z_range * 0.12
-
-    # --- Peak marker (gold star) ---
-    # nanargmax on z_orig guarantees we mark the true best metric cell,
-    # not an artifact of the NaN-fill interpolation used for rendering.
-    if not np.all(np.isnan(z_orig)):
-        peak_idx = np.unravel_index(np.nanargmax(z_orig), z_orig.shape)
-        peak_row, peak_col = peak_idx  # row → y-axis index, col → x-axis index
-        peak_z = z_orig[peak_row, peak_col]
-        ax.scatter(
-            [peak_col], [peak_row], [peak_z + z_offset],
-            marker=".", s=5, color="black",
-            edgecolors="black", linewidths=1.0,
-            label=f"Peak  {x_param}={pivot.columns[peak_col]}, {y_param}={pivot.index[peak_row]}",
-            zorder=10,
-            depthshade=False,
-        )
-        # Vertical drop-line from marker down to the surface so it is easy to
-        # read off which column / row the peak belongs to
-        ax.plot(
-            [peak_col, peak_col], [peak_row, peak_row], [peak_z, peak_z + z_offset],
-            color="black", linewidth=1.5, linestyle="--", zorder=9,
+    # Contour for every param pair
+    for x_param, y_param in param_pairs:
+        pair_label = f"{x_param}_x_{y_param}"
+        safe_plot(
+            f"Contour {x_param} x {y_param}",
+            lambda x=x_param, y=y_param, lbl=pair_label: plot_contour(
+                results, x_param=x, y_param=y,
+                output_path=output_dir / f"contour_{lbl}.png"
+            ),
         )
 
-    # --- Default parameters marker (red diamond) ---
-    default_x = _find_default_index(list(pivot.columns), x_param)
-    default_y = _find_default_index(list(pivot.index), y_param)
-    if default_x is not None and default_y is not None:
-        default_x_i = int(round(default_x))
-        default_y_i = int(round(default_y))
-        default_z = z_orig[default_y_i, default_x_i]
-        if not np.isnan(default_z):
-            ax.scatter(
-                [default_x], [default_y], [default_z + z_offset],
-                marker=".", s=5, color="black",
-                edgecolors="black", linewidths=1.0,
-                label=f"Defaults  {x_param}={_DEFAULTS.get(x_param)}, {y_param}={_DEFAULTS.get(y_param)}",
-                zorder=10,
-                depthshade=False,
-            )
-            ax.plot(
-                [default_x, default_x], [default_y, default_y], [default_z, default_z + z_offset],
-                color="red", linewidth=1.5, linestyle="--", zorder=9,
-            )
+    safe_plot(
+        "Parameter Importance (variance)",
+        lambda: plot_importance(
+            results, method="variance", output_path=output_dir / "importance_variance.png"
+        ),
+    )
+    safe_plot(
+        "Parameter Importance (correlation)",
+        lambda: plot_importance(
+            results, method="correlation", output_path=output_dir / "importance_correlation.png"
+        ),
+    )
+    safe_plot(
+        "Interaction Heatmap",
+        lambda: plot_interaction_heatmap(results, output_path=output_dir / "interactions.png"),
+    )
+    safe_plot(
+        "Parallel Coordinates",
+        lambda: plot_parallel_coordinates(
+            results, highlight_best=10, output_path=output_dir / "parallel.png"
+        ),
+    )
+    safe_plot(
+        "Dashboard",
+        lambda: plot_dashboard(results, output_path=output_dir / "dashboard.png"),
+    )
 
-    ax.legend(loc="upper left", fontsize=8, framealpha=0.7)
-
-    if title is None:
-        title = f"{metric_col} landscape: {x_param} vs {y_param}"
-    ax.set_title(title)
-
-    fig.tight_layout()
-    save_figure(fig, output_path)
-    return fig
+    # ------------------------------------------------------------------
+    # 6. Summary
+    # ------------------------------------------------------------------
+    metric_folders = ", ".join(m.replace(".mean", "") for m in all_metrics)
+    print(f"\nDone! All plots saved to: {output_dir}/")
+    print(f"  Metric subdirs : {metric_folders}")
+    print(f"  Structural plots in root output dir")
 
 
-def plot_contour(
-    df: pd.DataFrame,
-    x_param: str,
-    y_param: str,
-    metric: str = "mean_score",
-    agg_func: str = "mean",
-    levels: int = 15,
-    filled: bool = True,
-    title: Optional[str] = None,
-    cmap: Optional[str] = None,
-    figsize: Tuple[float, float] = (10, 8),
-    output_path: Optional[Union[str, Path]] = None,
-    ax: Optional[matplotlib.axes.Axes] = None,
-) -> matplotlib.figure.Figure:
-    """Plot contour lines of metric over two hyperparameters.
-
-    Contour plots reveal ridges, plateaus, and gradient directions
-    in the performance landscape.
-
-    A black star is drawn at the peak metric location and a red diamond at the
-    default hyperparameter location (learning_rate=0.3, n_estimators=100,
-    max_depth=6), where applicable.
-
-    Args:
-        df: Results DataFrame.
-        x_param: x-axis parameter.
-        y_param: y-axis parameter.
-        metric: Metric name.
-        agg_func: Aggregation function.
-        levels: Number of contour levels.
-        filled: Use filled contours (contourf) vs line contours (contour).
-        title: Plot title.
-        cmap: Colormap.
-        figsize: Figure size.
-        output_path: Save path.
-        ax: Optional axes.
-
-    Returns:
-        matplotlib Figure.
-    """
-    filtered = validate_results_dataframe(df, param_columns=[x_param, y_param], metric=metric)
-    metric_col = get_metric_column(filtered, metric)
-
-    pivot = pivot_for_heatmap(filtered, x_param, y_param, metric_col, agg_func)
-
-    if cmap is None:
-        cmap = get_default_colormap()
-
-    fig, ax = get_figure_and_axes(ax, figsize)
-
-    x_vals = np.arange(len(pivot.columns))
-    y_vals = np.arange(len(pivot.index))
-    X, Y = np.meshgrid(x_vals, y_vals)
-    Z = pivot.values.astype(float)
-
-    plot_func = ax.contourf if filled else ax.contour
-    cs = plot_func(X, Y, Z, levels=levels, cmap=cmap)
-
-    if not filled:
-        ax.clabel(cs, inline=True, fontsize=8)
-
-    fig.colorbar(cs, ax=ax, label=metric_col)
-
-    ax.set_xticks(x_vals)
-    ax.set_xticklabels([str(v) for v in pivot.columns], rotation=45, ha="right")
-    ax.set_yticks(y_vals)
-    ax.set_yticklabels([str(v) for v in pivot.index])
-
-    ax.set_xlabel(x_param)
-    ax.set_ylabel(y_param)
-
-    # --- Peak marker (gold star) ---
-    values = pivot.values.astype(float)
-    if not np.all(np.isnan(values)):
-        peak_idx = np.unravel_index(np.nanargmax(values), values.shape)
-        peak_row, peak_col = peak_idx
-        ax.plot(
-            peak_col, peak_row,
-            marker=".", markersize=30, color="black",
-            markeredgecolor="black", markeredgewidth=0.8,
-            label=f"Peak ({pivot.index[peak_row]}, {pivot.columns[peak_col]})",
-            zorder=5,
-        )
-
-    # --- Default parameters marker (red diamond) ---
-    default_x = _find_default_index(list(pivot.columns), x_param)
-    default_y = _find_default_index(list(pivot.index), y_param)
-    if default_x is not None and default_y is not None:
-        ax.plot(
-            default_x, default_y,
-            marker=".", markersize=30, color="red",
-            markeredgecolor="black", markeredgewidth=0.8,
-            label=f"Defaults ({_DEFAULTS.get(x_param)}, {_DEFAULTS.get(y_param)})",
-            zorder=5,
-        )
-
-    ax.legend(loc="upper left", fontsize=8, framealpha=0.7)
-
-    if title is None:
-        title = f"{metric_col} contours: {x_param} vs {y_param}"
-    ax.set_title(title)
-
-    fig.tight_layout()
-    save_figure(fig, output_path)
-    return fig
+if __name__ == "__main__":
+    main()
