@@ -53,7 +53,7 @@ hyperparameters:
 
 dataset:
   name: "pregnancy_outcome"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/pregnancy_outcome_data.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/pregnancy_outcome_data.csv"
   target_column: "Outcome"
   test_size: 0.2
   random_state: 42

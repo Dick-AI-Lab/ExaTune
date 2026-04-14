@@ -53,7 +53,7 @@ hyperparameters:
 
 dataset:
   name: "gestational_diabetes"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/gestational_diabetes_imputed.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/gestational_diabetes_imputed.csv"
   target_column: "Class Label(GDM /Non GDM)"
   test_size: 0.2
   random_state: 42

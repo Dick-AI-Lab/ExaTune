@@ -53,7 +53,7 @@ hyperparameters:
 
 dataset:
   name: "maternal_risk"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/Maternal_Risk_imputed.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/Maternal_Risk_imputed.csv"
   target_column: "RiskLevel"
   test_size: 0.2
   random_state: 42
