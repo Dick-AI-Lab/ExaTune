@@ -173,10 +173,10 @@ def plot_surface_plotly(
         traces.append(go.Scatter3d(
             x=[pc], y=[pr], z=[marker_z],
             mode="markers+text",
-            marker=dict(size=10, color="black", symbol="circle"),
+            marker=dict(size=10, color="#D63384", symbol="circle"),
             text=[f"Peak<br>{x_param}={x_labels[pc]}<br>{y_param}={y_labels[pr]}"],
             textposition="top center",
-            textfont=dict(size=11, color="black"),
+            textfont=dict(size=11, color="#D63384"),
             name=f"Peak  {x_param}={x_labels[pc]}, {y_param}={y_labels[pr]}",
             hovertemplate=(
                 f"<b>Peak</b><br>{x_param}: {x_labels[pc]}<br>"
@@ -188,7 +188,7 @@ def plot_surface_plotly(
         traces.append(go.Scatter3d(
             x=[pc, pc], y=[pr, pr], z=[peak_z, marker_z],
             mode="lines",
-            line=dict(color="black", width=3, dash="dash"),
+            line=dict(color="#D63384", width=3, dash="dash"),
             showlegend=False,
             hoverinfo="skip",
         ))
@@ -205,10 +205,10 @@ def plot_surface_plotly(
             traces.append(go.Scatter3d(
                 x=[default_x], y=[default_y], z=[marker_z_d],
                 mode="markers+text",
-                marker=dict(size=10, color="red", symbol="circle"),
+                marker=dict(size=10, color="#111D4F", symbol="circle"),
                 text=[f"Defaults<br>{x_param}={_DEFAULTS.get(x_param)}<br>{y_param}={_DEFAULTS.get(y_param)}"],
                 textposition="top center",
-                textfont=dict(size=11, color="red"),
+                textfont=dict(size=11, color="#111D4F"),
                 name=f"Defaults  {x_param}={_DEFAULTS.get(x_param)}, {y_param}={_DEFAULTS.get(y_param)}",
                 hovertemplate=(
                     f"<b>Defaults</b><br>{x_param}: {_DEFAULTS.get(x_param)}<br>"
@@ -220,7 +220,7 @@ def plot_surface_plotly(
                 x=[default_x, default_x], y=[default_y, default_y],
                 z=[default_z, marker_z_d],
                 mode="lines",
-                line=dict(color="red", width=3, dash="dash"),
+                line=dict(color="#111D4F", width=3, dash="dash"),
                 showlegend=False,
                 hoverinfo="skip",
             ))
