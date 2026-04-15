@@ -65,40 +65,38 @@ warnings.filterwarnings("ignore")
 SEARCH_STYLES: Dict[str, dict] = {
     "grid": {
         "label":        "Grid Search",
-        "color":        "#2196F3",   # blue  — grid IS the background, no heatmap boxes
+        "color":        "black",   # blue  — grid IS the background, no heatmap boxes
         "marker_3d":    "square",
-        "plotly_color": "#2196F3",
+        "plotly_color": "black",
         "alpha":        0.75,
         "size_3d":      6,
     },
     "random": {
         "label":        "Random Search",
-        "color":        "#FF9800",   # orange
+        "color":        "black",   # orange
         "marker_3d":    "diamond",
-        "plotly_color": "#FF9800",
+        "plotly_color": "black",
         "alpha":        0.80,
         "size_3d":      6,
-        "box_lw":       2.0,         # normal box linewidth on heatmap
-        "box_lw_best":  4.0,         # extra-bold for best cell
     },
     "bayesian": {
         "label":        "Bayesian Search",
-        "color":        "#E91E63",   # pink/magenta
+        "color":        "black",   # pink/magenta
         "marker_3d":    "circle",
-        "plotly_color": "#E91E63",
+        "plotly_color": "black",
         "alpha":        0.85,
         "size_3d":      7,
-        "box_lw":       2.0,
-        "box_lw_best":  4.0,
     },
 }
 
-# Color used when random AND bayesian both hit the same cell
-_OVERLAP_COLOR = "#9C27B0"   # purple — signals both searches agree
-
 # Overall peak box on heatmap (applies regardless of search type)
-_PEAK_COLOR    = "#1B5E20"   # dark green
-_PEAK_LW       = 3.5         # linewidth for overall-peak box
+_PEAK_COLOR = "#D63384"   # bright green — distinct from both search colors
+_PEAK_LW    = 3.0
+
+# Glyph sizing
+_GLYPH_SIZE_NORMAL = 55   # scatter marker size (pts^2)
+_GLYPH_SIZE_BEST   = 130  # larger for the best-found cell
+_STAR_SIZE         = 60   # extra star marker for best cells
 
 
 # ---------------------------------------------------------------------------
@@ -232,13 +230,12 @@ def pivot_coords(pivot: pd.DataFrame, x_val, y_val) -> Tuple[Optional[int], Opti
 
 
 # ---------------------------------------------------------------------------
-# 2D Heatmap with overlaid search markers
+# 2D Heatmap with overlaid glyph markers
 # ---------------------------------------------------------------------------
 
-def _draw_box(ax, col: int, row: int, color: str, lw: float, zorder: int = 6) -> None:
-    """Draw a square outline on heatmap cell (col, row)."""
-    import matplotlib.patches as mp
-    rect = mp.FancyBboxPatch(
+def _draw_peak_box(ax, col: int, row: int, color: str, lw: float, zorder: int = 5) -> None:
+    """Draw a square outline on heatmap cell (col, row) — used only for overall peak."""
+    rect = mpatches.FancyBboxPatch(
         (col - 0.47, row - 0.47), 0.94, 0.94,
         boxstyle="square,pad=0",
         linewidth=lw,
@@ -247,36 +244,6 @@ def _draw_box(ax, col: int, row: int, color: str, lw: float, zorder: int = 6) ->
         zorder=zorder,
     )
     ax.add_patch(rect)
-
-
-def _draw_split_box(ax, col: int, row: int, color_top_left: str, color_bot_right: str,
-                    lw: float, zorder: int = 8) -> None:
-    """
-    Draw a cell with two half-borders showing two search colors simultaneously.
-    Top+left edges in color_top_left (random/orange).
-    Bottom+right edges in color_bot_right (bayesian/pink).
-    """
-    from matplotlib.patches import PathPatch
-    from matplotlib.path import Path as MPath
-
-    x0, y0 = col - 0.47, row - 0.47
-    x1, y1 = col + 0.47, row + 0.47
-
-    # Top edge + left edge
-    path_tl = MPath(
-        [(x0, y1), (x1, y1), (x0, y1), (x0, y0)],
-        [MPath.MOVETO, MPath.LINETO, MPath.MOVETO, MPath.LINETO],
-    )
-    ax.add_patch(PathPatch(path_tl, edgecolor=color_top_left, facecolor="none",
-                           linewidth=lw, zorder=zorder))
-
-    # Bottom edge + right edge
-    path_br = MPath(
-        [(x0, y0), (x1, y0), (x1, y0), (x1, y1)],
-        [MPath.MOVETO, MPath.LINETO, MPath.MOVETO, MPath.LINETO],
-    )
-    ax.add_patch(PathPatch(path_br, edgecolor=color_bot_right, facecolor="none",
-                           linewidth=lw, zorder=zorder))
 
 
 def plot_comparison_heatmap(
@@ -300,7 +267,7 @@ def plot_comparison_heatmap(
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label(metric, fontsize=11)
 
-    # Cell value annotations
+    # Cell value annotations — centred, numbers stay fully visible
     z_min, z_max = np.nanmin(Z), np.nanmax(Z)
     z_mid = (z_min + z_max) / 2.0
     for row in range(n_rows):
@@ -309,78 +276,126 @@ def plot_comparison_heatmap(
             if np.isnan(val):
                 continue
             text_color = "white" if val < z_mid else "#1a1a1a"
-            ax.text(col, row, f"{val:.3f}", ha="center", va="center",
-                    color=text_color, fontsize=7, zorder=3)
+            ax.text(
+                col, row + 0.18,          # slightly below centre — glyphs sit top-right
+                f"{val:.3f}",
+                ha="center", va="center",
+                color=text_color, fontsize=7, zorder=3,
+            )
 
-    # Overall peak — bold green box (drawn first, underneath per-search boxes)
+    # ── Overall peak — bright green border box (no glyph, just an outline) ──
     if not np.all(np.isnan(Z)):
         pr, pc = np.unravel_index(np.nanargmax(Z), Z.shape)
-        _draw_box(ax, pc, pr, _PEAK_COLOR, lw=_PEAK_LW, zorder=5)
+        _draw_peak_box(ax, pc, pr, _PEAK_COLOR, lw=_PEAK_LW, zorder=5)
 
-    # ----------------------------------------------------------------
-    # Per-search boxes on heatmap
-    #
-    # Rules:
-    #   - grid search  → no boxes (it IS the background surface)
-    #   - random       → orange box; extra-bold if it is that search's best cell
-    #   - bayesian     → pink box;   extra-bold if it is that search's best cell
-    #   - cell hit by BOTH random AND bayesian → purple box (overlap color),
-    #                    extra-bold if it is the best for either search
-    # ----------------------------------------------------------------
-
-    # Collect all cells visited per non-grid search type
-    visited: Dict[str, set] = {}   # stype -> set of (col_i, row_i)
-    bests = get_best_per_search(per_type, x_param, y_param, metric)
-
-    for stype, df in per_type.items():
-        if stype == "grid":
-            continue   # grid is the background — no markers
+    # ── Collect visited cells and best cells per non-grid search type ──
+    non_grid_types = [s for s in per_type if s != "grid"]
+    visited: Dict[str, set] = {}
+    for stype in non_grid_types:
         cells = set()
-        sub = df.dropna(subset=[x_param, y_param, metric])
+        sub = per_type[stype].dropna(subset=[x_param, y_param, metric])
         for _, row_data in sub.iterrows():
             col_i, row_i = pivot_coords(pivot, row_data[x_param], row_data[y_param])
             if col_i is not None and row_i is not None:
                 cells.add((col_i, row_i))
         visited[stype] = cells
 
-    # Determine which cells are visited by multiple non-grid searches
-    non_grid_types = [s for s in per_type if s != "grid"]
-    all_visited_cells: Dict[tuple, List[str]] = {}  # (col,row) -> list of stypes
-    for stype, cells in visited.items():
-        for cell in cells:
-            all_visited_cells.setdefault(cell, []).append(stype)
+    bests = get_best_per_search(per_type, x_param, y_param, metric)
+    best_cells: Dict[str, Optional[Tuple[int, int]]] = {}
+    for stype, best_row in bests.items():
+        if stype == "grid":
+            continue
+        col_i, row_i = pivot_coords(pivot, best_row[x_param], best_row[y_param])
+        best_cells[stype] = (col_i, row_i) if col_i is not None else None
 
-    # Draw boxes — overlap cells get purple, single-search cells get their color
-    drawn_legend: Dict[str, bool] = {}  # track what's already in legend
+    # ── Glyph layout per cell ──
+    #
+    # Glyphs sit in the TOP-RIGHT corner of each cell so the centred number
+    # (nudged slightly downward) remains fully readable.
+    #
+    # Horizontal offsets when both searches visit the same cell:
+    #   random   → (col + 0.28, row - 0.28)
+    #   bayesian → (col + 0.28, row - 0.28) but stacked vertically if both present
+    #   → when BOTH present: random at top-right, bayesian just below it
+    #
+    # Glyph legend:
+    #   random   → hollow circle  (facecolor=none, edgecolor=orange)
+    #   bayesian → filled circle  (facecolor=pink)
+    #   best     → same glyph but larger + a small ★ outline below it
 
-    for (col_i, row_i), stypes_here in all_visited_cells.items():
-        # Determine best cells per search for bold linewidth
-        is_best = {
-            stype: (
-                stype in bests and
-                pivot_coords(pivot, bests[stype][x_param], bests[stype][y_param]) == (col_i, row_i)
-            )
-            for stype in stypes_here
-        }
-        any_best = any(is_best.values())
+    GLYPH_X_OFF  =  0.29   # distance from cell centre → right
+    GLYPH_Y_OFF  = -0.29   # distance from cell centre → top (negative = up in imshow)
+    GLYPH_Y_SEP  =  0.16   # vertical gap between stacked glyphs
 
-        if len(stypes_here) >= 2:
-            # Overlap — split box: random color on top+left, bayesian on bottom+right
-            lw = SEARCH_STYLES[stypes_here[0]]["box_lw_best"] if any_best                  else SEARCH_STYLES[stypes_here[0]]["box_lw"]
-            c_tl = SEARCH_STYLES["random"]["color"]   if "random"   in stypes_here                    else SEARCH_STYLES[stypes_here[0]]["color"]
-            c_br = SEARCH_STYLES["bayesian"]["color"] if "bayesian" in stypes_here                    else SEARCH_STYLES[stypes_here[-1]]["color"]
-            _draw_split_box(ax, col_i, row_i, c_tl, c_br, lw=lw, zorder=8)
-            if "overlap" not in drawn_legend:
-                drawn_legend["overlap"] = True
+    glyph_scatter_args = []   # list of dicts fed to ax.scatter at the end
+
+    all_cells = set()
+    for cells in visited.values():
+        all_cells.update(cells)
+
+    for (col_i, row_i) in all_cells:
+        types_here = [s for s in non_grid_types if (col_i, row_i) in visited[s]]
+
+        # Vertical positions — if only one search, centred at GLYPH offset;
+        # if two, stack them (random above, bayesian below)
+        if len(types_here) == 1:
+            y_positions = {types_here[0]: row_i + GLYPH_Y_OFF}
         else:
-            stype = stypes_here[0]
-            style = SEARCH_STYLES[stype]
-            lw = style["box_lw_best"] if is_best[stype] else style["box_lw"]
-            _draw_box(ax, col_i, row_i, style["color"], lw=lw, zorder=7)
-            if stype not in drawn_legend:
-                drawn_legend[stype] = True
+            # random gets the topmost slot, bayesian below
+            order = [s for s in ["random", "bayesian"] if s in types_here]
+            y_positions = {}
+            for k, stype in enumerate(order):
+                y_positions[stype] = row_i + GLYPH_Y_OFF + k * GLYPH_Y_SEP
 
-    # Legend
+        x_glyph = col_i + GLYPH_X_OFF
+
+        for stype in types_here:
+            y_glyph = y_positions[stype]
+            is_best  = best_cells.get(stype) == (col_i, row_i)
+            color    = SEARCH_STYLES[stype]["color"]
+            size     = _GLYPH_SIZE_BEST if is_best else _GLYPH_SIZE_NORMAL
+
+            if stype == "random":
+                # Hollow circle: no fill, coloured edge
+                glyph_scatter_args.append(dict(
+                    x=x_glyph, y=y_glyph,
+                    s=size,
+                    facecolors="none",
+                    edgecolors=color,
+                    linewidths=2.0 if is_best else 1.5,
+                    zorder=8,
+                    marker="o",
+                ))
+            elif stype == "bayesian":
+                # Filled circle
+                glyph_scatter_args.append(dict(
+                    x=x_glyph, y=y_glyph,
+                    s=size,
+                    facecolors=color,
+                    edgecolors="white",
+                    linewidths=0.8,
+                    zorder=8,
+                    marker="o",
+                ))
+
+            # Extra star below glyph to call out best-found cell
+            if is_best:
+                star_y = y_glyph + 0.15   # just below the glyph (rows increase downward)
+                glyph_scatter_args.append(dict(
+                    x=x_glyph, y=star_y,
+                    s=_STAR_SIZE,
+                    facecolors=color,
+                    edgecolors="white",
+                    linewidths=0.6,
+                    zorder=9,
+                    marker="*",
+                ))
+
+    # Draw all glyphs in one pass
+    for kwargs in glyph_scatter_args:
+        ax.scatter(**kwargs)
+
+    # ── Axis labels & ticks ──
     ax.set_xticks(range(n_cols))
     ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9)
     ax.set_yticks(range(n_rows))
@@ -393,34 +408,38 @@ def plot_comparison_heatmap(
         title = f"{metric} heatmap: {x_param} × {y_param}\n{search_names}"
     ax.set_title(title, fontsize=12, pad=10)
 
-    # Build legend handles
+    # ── Legend ──
     legend_handles = [
         mpatches.Patch(edgecolor=_PEAK_COLOR, facecolor="none",
                        linewidth=_PEAK_LW, label="Overall Peak"),
     ]
     for stype in non_grid_types:
-        if stype in drawn_legend:
-            style = SEARCH_STYLES[stype]
+        style = SEARCH_STYLES[stype]
+        color = style["color"]
+
+        if stype == "random":
             legend_handles.append(
-                mpatches.Patch(edgecolor=style["color"], facecolor="none",
-                               linewidth=style["box_lw"],
-                               label=f"{style['label']} (visited)")
+                plt.scatter([], [], s=_GLYPH_SIZE_NORMAL,
+                            facecolors="none", edgecolors=color, linewidths=1.5,
+                            marker="o", label=f"{style['label']} (visited)")
             )
             legend_handles.append(
-                mpatches.Patch(edgecolor=style["color"], facecolor="none",
-                               linewidth=style["box_lw_best"],
-                               label=f"{style['label']} best")
+                plt.scatter([], [], s=_GLYPH_SIZE_BEST,
+                            facecolors="none", edgecolors=color, linewidths=2.0,
+                            marker="o", label=f"{style['label']} best ★")
             )
-    if "overlap" in drawn_legend:
-        # Show both colors in legend for the split-border overlap cell
-        legend_handles.append(
-            mpatches.Patch(edgecolor=SEARCH_STYLES["random"]["color"], facecolor="none",
-                           linewidth=2.5, label="Both visited (orange=random side)")
-        )
-        legend_handles.append(
-            mpatches.Patch(edgecolor=SEARCH_STYLES["bayesian"]["color"], facecolor="none",
-                           linewidth=2.5, label="Both visited (pink=Bayesian side)")
-        )
+        elif stype == "bayesian":
+            legend_handles.append(
+                plt.scatter([], [], s=_GLYPH_SIZE_NORMAL,
+                            facecolors=color, edgecolors="white", linewidths=0.8,
+                            marker="o", label=f"{style['label']} (visited)")
+            )
+            legend_handles.append(
+                plt.scatter([], [], s=_GLYPH_SIZE_BEST,
+                            facecolors=color, edgecolors="white", linewidths=0.8,
+                            marker="o", label=f"{style['label']} best ★")
+            )
+
     if "grid" in per_type:
         legend_handles.append(
             mpatches.Patch(facecolor=SEARCH_STYLES["grid"]["color"],
@@ -428,8 +447,8 @@ def plot_comparison_heatmap(
         )
 
     ax.legend(handles=legend_handles, loc="upper left",
-              bbox_to_anchor=(1.22, 1.0), bbox_transform=ax.transAxes,
-              fontsize=9, framealpha=0.9)
+              bbox_to_anchor=(1.18, 1.0), bbox_transform=ax.transAxes,
+              fontsize=9, framealpha=0.9, scatterpoints=1)
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -466,69 +485,78 @@ def plot_comparison_surface_static(
     z_range = np.nanmax(Z) - np.nanmin(Z) if not np.all(np.isnan(Z)) else 0.0
     z_offset = z_range * 0.10
 
+    # ---------------------------
     # Overall peak
+    # ---------------------------
     if not np.all(np.isnan(Z)):
         pr, pc = np.unravel_index(np.nanargmax(Z), Z.shape)
         peak_z = Z[pr, pc]
-        ax.scatter([pc], [pr], [peak_z + z_offset * 1.5],
-                   color=_PEAK_COLOR, s=120, marker=_PEAK_MARKER,
+
+        ax.scatter([pc], [pr], [peak_z + z_offset],
+                   color=_PEAK_COLOR, s=120,
                    zorder=10, label="Overall Peak")
-        ax.plot([pc, pc], [pr, pr], [peak_z, peak_z + z_offset * 1.5],
-                color=_PEAK_COLOR, linewidth=1.5, linestyle="--")
 
-    # Per-search best + all sampled points
-    # Grid search is the background surface itself — skip its points and best marker
-    bests = get_best_per_search(per_type, x_param, y_param, metric)
-    for stype, df in per_type.items():
-        if stype == "grid":
-            continue   # grid IS the surface — no overlaid markers needed
+        ax.plot([pc, pc], [pr, pr], [peak_z, peak_z + z_offset],
+                color=_PEAK_COLOR, linestyle="--")
 
-        style = SEARCH_STYLES[stype]
+    # ---------------------------
+    # Random search → hollow circles
+    # ---------------------------
+    for _, row in per_type.get("random", pd.DataFrame()).iterrows():
+        col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
+        if col_i is None or row_i is None:
+            continue
 
-        # All evaluated points — projected onto surface
-        sub = df.dropna(subset=[x_param, y_param, metric])
-        for _, row in sub.iterrows():
-            col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
-            if col_i is None or row_i is None:
-                continue
-            cell_z = Z[row_i, col_i]
-            if np.isnan(cell_z):
-                continue
-            ax.scatter([col_i], [row_i], [cell_z + z_offset * 0.3],
-                       color=style["color"], s=12, alpha=0.30, zorder=5)
+        z_val = Z[row_i, col_i]
+        if np.isnan(z_val):
+            continue
 
-        # Best point for this search type
-        if stype in bests:
-            best_row = bests[stype]
-            col_i, row_i = pivot_coords(pivot, best_row[x_param], best_row[y_param])
-            if col_i is not None and row_i is not None:
-                bz = Z[row_i, col_i]
-                if not np.isnan(bz):
-                    ax.scatter([col_i], [row_i], [bz + z_offset],
-                               color=style["color"], s=90, marker="o", zorder=9,
-                               edgecolors="white", linewidths=0.8,
-                               label=f"{style['label']} best ({best_row[metric]:.4f})")
-                    ax.plot([col_i, col_i], [row_i, row_i], [bz, bz + z_offset],
-                            color=style["color"], linewidth=1.5, linestyle="--")
+        ax.scatter(
+            [col_i], [row_i], [z_val + z_offset * 0.2],
+            facecolors="none",
+            edgecolors="black",
+            s=25,
+            linewidths=1.2,
+            alpha=0.6,
+        )
+
+    # ---------------------------
+    # Bayesian → just points (no spaghetti)
+    # ---------------------------
+    for _, row in per_type.get("bayesian", pd.DataFrame()).iterrows():
+        col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
+        if col_i is None or row_i is None:
+            continue
+
+        z_val = Z[row_i, col_i]
+        if np.isnan(z_val):
+            continue
+
+        ax.scatter(
+            [col_i], [row_i], [z_val + z_offset * 0.2],
+            color="black",
+            s=10,
+        )
 
     ax.set_xticks(range(len(x_labels)))
     ax.set_xticklabels([str(v) for v in x_labels], rotation=35, ha="right", fontsize=8)
     ax.set_yticks(range(len(y_labels)))
     ax.set_yticklabels([str(v) for v in y_labels], fontsize=8)
-    ax.set_xlabel(x_param, fontsize=10)
-    ax.set_ylabel(y_param, fontsize=10)
-    ax.set_zlabel(metric, fontsize=10)
-    ax.legend(fontsize=8, loc="upper left")
+    ax.set_xlabel(x_param)
+    ax.set_ylabel(y_param)
+    ax.set_zlabel(metric)
+
+    ax.legend()
 
     if title is None:
-        search_names = " vs ".join(SEARCH_STYLES[s]["label"] for s in per_type)
-        title = f"{metric} surface: {x_param} × {y_param}\n{search_names}"
-    ax.set_title(title, fontsize=12)
+        title = f"{metric} surface: {x_param} × {y_param}"
+    ax.set_title(title)
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
+
     print(f"    Saved static 3D surface → {output_path}")
 
 
@@ -612,82 +640,62 @@ def plot_comparison_surface_plotly(
     # Per-search-type: all sampled points + best marker
     # Grid search is the background surface itself — skip its points and best marker
     bests = get_best_per_search(per_type, x_param, y_param, metric)
+
     for stype, df in per_type.items():
         if stype == "grid":
-            continue   # grid IS the surface — no overlaid markers needed
+            continue
 
-        style = SEARCH_STYLES[stype]
-
-        # All evaluated points
         sub = df.dropna(subset=[x_param, y_param, metric])
-        pt_x, pt_y, pt_z, pt_hover = [], [], [], []
+
+        x_pts, y_pts, z_pts = [], [], []
+
         for _, row in sub.iterrows():
             col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
             if col_i is None or row_i is None:
                 continue
-            cell_z = z_orig[row_i, col_i]
-            if np.isnan(cell_z):
-                continue
-            pt_x.append(col_i)
-            pt_y.append(row_i)
-            pt_z.append(cell_z + z_offset * 0.25)
-            pt_hover.append(
-                f"{x_param}: {row[x_param]}<br>{y_param}: {row[y_param]}<br>"
-                f"{metric}: {row[metric]:.4f}"
-            )
 
-        if pt_x:
+            z_val = z_orig[row_i, col_i]
+            if np.isnan(z_val):
+                continue
+
+            x_pts.append(col_i)
+            y_pts.append(row_i)
+            z_pts.append(z_val + z_offset * 0.2)
+
+        # -------------------------------
+        # RANDOM → light hollow circles
+        # -------------------------------
+        if stype == "random":
             traces.append(go.Scatter3d(
-                x=pt_x, y=pt_y, z=pt_z,
+                x=x_pts,
+                y=y_pts,
+                z=z_pts,
                 mode="markers",
                 marker=dict(
-                    size=style["size_3d"] * 0.55,
-                    color=style["plotly_color"],
-                    symbol=style["marker_3d"],
-                    opacity=0.40,
-                    line=dict(width=0),
+                    size=5,
+                    color="rgba(0,0,0,0)",  # no fill
+                    symbol="circle",
+                    line=dict(color="rgba(0,0,0,0.3)", width=1)
                 ),
-                name=f"{style['label']} (all)",
-                hovertemplate="%{customdata}<extra></extra>",
-                customdata=pt_hover,
-                legendgroup=stype,
+                opacity=0.6,
+                name="Random Search",
             ))
 
-        # Best point
-        if stype in bests:
-            best_row = bests[stype]
-            col_i, row_i = pivot_coords(pivot, best_row[x_param], best_row[y_param])
-            if col_i is not None and row_i is not None:
-                bz = z_orig[row_i, col_i]
-                if not np.isnan(bz):
-                    traces.append(go.Scatter3d(
-                        x=[col_i], y=[row_i], z=[bz + z_offset],
-                        mode="markers+text",
-                        marker=dict(
-                            size=style["size_3d"] + 3,
-                            color=style["plotly_color"],
-                            symbol=style["marker_3d"],
-                            line=dict(color="white", width=1),
-                        ),
-                        text=[f"{style['label']}<br>best: {best_row[metric]:.4f}"],
-                        textposition="top center",
-                        textfont=dict(size=10, color=style["plotly_color"]),
-                        name=f"{style['label']} best ({best_row[metric]:.4f})",
-                        legendgroup=stype,
-                        hovertemplate=(
-                            f"<b>{style['label']} Best</b><br>"
-                            f"{x_param}: {best_row[x_param]}<br>"
-                            f"{y_param}: {best_row[y_param]}<br>"
-                            f"{metric}: {best_row[metric]:.4f}<extra></extra>"
-                        ),
-                    ))
-                    traces.append(go.Scatter3d(
-                        x=[col_i, col_i], y=[row_i, row_i], z=[bz, bz + z_offset],
-                        mode="lines",
-                        line=dict(color=style["plotly_color"], width=3, dash="dash"),
-                        showlegend=False, hoverinfo="skip",
-                        legendgroup=stype,
-                    ))
+        # -------------------------------
+        # BAYESIAN → solid black dots
+        # -------------------------------
+        elif stype == "bayesian":
+            traces.append(go.Scatter3d(
+                x=x_pts,
+                y=y_pts,
+                z=z_pts,
+                mode="markers",
+                marker=dict(
+                    size=4,
+                    color="black"
+                ),
+                name="Bayesian Search",
+            ))
 
     if title is None:
         search_names = " vs ".join(SEARCH_STYLES[s]["label"] for s in per_type)
@@ -949,7 +957,7 @@ Examples:
       --no-plotly --no-surface
 
 Plot types produced (per param pair):
-  heatmap_<x>_x_<y>.png       — 2D heatmap with per-search best markers
+  heatmap_<x>_x_<y>.png       — 2D heatmap with per-search glyph markers
   surface_<x>_x_<y>.png       — static 3D matplotlib surface
   surface_<x>_x_<y>.html      — interactive rotatable Plotly surface
   score_distribution.png      — violin plot comparing score distributions
@@ -990,6 +998,7 @@ Plot types produced (per param pair):
 
     # Plot type toggles
     toggle_group = parser.add_argument_group("Plot type toggles")
+    toggle_group.add_range_argument = None
     toggle_group.add_argument("--no-heatmap",      action="store_true",
                               help="Skip heatmap plots")
     toggle_group.add_argument("--no-surface",      action="store_true",

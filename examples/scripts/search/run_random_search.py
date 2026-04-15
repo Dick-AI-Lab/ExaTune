@@ -154,8 +154,26 @@ def create_model(model_cfg: dict, hyperparams: Dict[str, Any], random_seed: int)
     all_params = {**fixed, **hyperparams}
 
     # Inject random_state where supported
-    if "random_state" not in all_params and model_type in ("sklearn", "xgboost"):
-        all_params["random_state"] = random_seed
+    if model_type == "sklearn":
+        class_path = model_cfg.get("class_name") or model_cfg.get("class")
+        if not class_path:
+            raise ValueError("model.class_name is required for sklearn models")
+
+        parts = class_path.rsplit(".", 1)
+        if len(parts) == 2:
+            module_path, class_name = parts
+            import importlib
+            module = importlib.import_module(module_path)
+            ModelClass = getattr(module, class_name)
+        else:
+            raise ValueError(f"Invalid class_name: {class_path!r} — expected 'module.ClassName'")
+
+        # Only inject random_state for models that accept it
+        NO_RANDOM_STATE = {"KNeighborsClassifier", "SVC", "SVR", "NearestNeighbors"}
+        if class_name not in NO_RANDOM_STATE and "random_state" not in all_params:
+            all_params["random_state"] = random_seed
+
+        return ModelClass(**all_params)
 
     if model_type == "sklearn":
         class_path = model_cfg.get("class_name") or model_cfg.get("class")

@@ -175,7 +175,7 @@ def load_dataset(dataset_cfg: dict) -> Tuple[np.ndarray, np.ndarray]:
             df = pd.read_parquet(dataset_path)
         elif suffix == ".npz":
             data = np.load(dataset_path)
-            X = data["x_train"].reshape(-1, -1).astype("float32")
+            X = data["x_train"].reshape(len(data["x_train"]), -1).astype("float32")
             y = data["y_train"]
             return X, y
         else:
@@ -200,9 +200,6 @@ def create_model(model_cfg: dict, hyperparams: Dict[str, Any], random_seed: int)
     fixed = model_cfg.get("fixed_params", {}) or {}
     all_params = {**fixed, **hyperparams}
 
-    if "random_state" not in all_params and model_type in ("sklearn", "xgboost"):
-        all_params["random_state"] = random_seed
-
     if model_type == "sklearn":
         class_path = model_cfg.get("class_name") or model_cfg.get("class")
         if not class_path:
@@ -214,6 +211,11 @@ def create_model(model_cfg: dict, hyperparams: Dict[str, Any], random_seed: int)
             ModelClass = getattr(module, parts[1])
         else:
             raise ValueError(f"Invalid class_name: {class_path!r}")
+
+        NO_RANDOM_STATE = {"KNeighborsClassifier", "SVC", "SVR", "NearestNeighbors"}
+        if parts[1] not in NO_RANDOM_STATE and "random_state" not in all_params:
+            all_params["random_state"] = random_seed
+
         return ModelClass(**all_params)
 
     elif model_type == "xgboost":
@@ -228,8 +230,6 @@ def create_model(model_cfg: dict, hyperparams: Dict[str, Any], random_seed: int)
 
     else:
         raise ValueError(f"Unsupported model type: {model_type!r}")
-
-
 # ---------------------------------------------------------------------------
 # Cross-validation  (identical to run_random_search.py)
 # ---------------------------------------------------------------------------
