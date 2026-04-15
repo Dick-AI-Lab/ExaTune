@@ -20,7 +20,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class: "Ridge"
+  class: "sklearn.linear_model.Ridge"
   task: "regression"
   fixed_params: {}
 
@@ -54,7 +54,7 @@ hyperparameters:
 
 dataset:
   name: "diabetes"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/diabetes.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/diabetes.csv"
   target_column: "Outcome"
   test_size: 0.2
   random_state: 42

@@ -20,7 +20,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class: "GradientBoostingRegressor"
+  class: "sklearn.ensemble.GradientBoostingRegressor"
   task: "regression"
   fixed_params: {}
 
@@ -43,7 +43,7 @@ hyperparameters:
 
 dataset:
   name: "california_housing"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/cali_housing.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/cali_housing.csv"
   target_column: "MedHouseVal"
   test_size: 0.2
   random_state: 42

@@ -21,7 +21,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class: "RandomForestClassifier"
+  class: "sklearn.ensemble.RandomForestClassifier"
   task: "classification"
   fixed_params:
     criterion: "gini"
@@ -45,7 +45,7 @@ hyperparameters:
 
 dataset:
   name: "adult"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/adult.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/adult.csv"
   target_column: "income"
   test_size: 0.2
   random_state: 42
