@@ -10,6 +10,8 @@ parser.add_argument("--metric", type=str, default=None,
                     help="Metric to analyze (auto-detected if not specified)")
 parser.add_argument("--direction", type=str, default="maximize",
                     choices=["maximize", "minimize"])
+parser.add_argument("--output-dir", type=str, default=None,
+                    help="Output directory for report (overrides hardcoded default)")
 args = parser.parse_args()
 
 input_path = Path(args.data).resolve()
@@ -55,7 +57,7 @@ if metric == "mean_score" and df["mean_score"].mean() < 0:
 
 summary = compute_experiment_summary(df, metric=metric, direction=direction)
 
-output_dir = Path(r"C:\Users\katel\OneDrive\Desktop\ExaTune\exatune\analysis\neurips")
+output_dir = Path(args.output_dir) if args.output_dir else Path(r"C:\Users\katel\OneDrive\Desktop\ExaTune\exatune\analysis\neurips")
 report_path = generate_report(
     df,
     output_path=output_dir,
