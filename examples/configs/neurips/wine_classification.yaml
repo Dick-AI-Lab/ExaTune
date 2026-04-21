@@ -21,7 +21,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class: "KNeighborsClassifier"
+  class_name: "sklearn.neighbors.KNeighborsClassifier"
   task: "classification"
   fixed_params: {}
 
@@ -57,10 +57,9 @@ hyperparameters:
 
 dataset:
   name: "wine"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/wine.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/wine.csv"
   target_column: "target"
   test_size: 0.2
-  random_state: 42
   stratify: true
 
 evaluation:

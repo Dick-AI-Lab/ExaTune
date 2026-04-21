@@ -21,7 +21,7 @@ experiment:
 
 model:
   type: "sklearn"
-  class: "SVC"
+  class: "sklearn.svm.SVC"
   task: "classification"
   fixed_params:
     kernel: "rbf"
@@ -42,7 +42,7 @@ hyperparameters:
              0.15, 0.25, 0.75, 20.0, 200.0]              # 25
 dataset:
   name: "mnist"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/mnist.npz"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/mnist.npz"
   test_size: 0.2
   random_state: 42
   stratify: true

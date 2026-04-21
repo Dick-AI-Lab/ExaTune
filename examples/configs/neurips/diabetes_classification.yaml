@@ -46,8 +46,8 @@ hyperparameters:
     type: "int"
     values: [100, 300, 500] # 3
   fit_intercept:
-    type: "int"
-    values: [0, 1] # 2
+    type: "categorical"
+    values: [true, false]
   solver:
     type: "categorical"
     values: ["auto", "svd", "cholesky", "lsqr", "sparse_cg", "sag", "saga"] # 7

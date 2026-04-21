@@ -1,22 +1,39 @@
 #!/usr/bin/env python3
 """
-ExaTune Random Search Runner
-=============================
-Runs random hyperparameter search from an ExaTune YAML config and saves
-results in the same Parquet format used by ExaTune's grid search, so all
-existing visualization tools (landscape 3D surface, heatmaps, violin plots)
+ExaTune Bayesian Search Runner
+================================
+Runs Bayesian hyperparameter optimization from an ExaTune YAML config and saves
+results in the same Parquet format used by ExaTune's grid search and random search,
+so all existing visualization tools (landscape 3D surface, heatmaps, violin plots)
 work without modification.
+
+Uses scikit-optimize (skopt) with Gaussian Process surrogate model by default.
+Install dependency:  pip install scikit-optimize
 
 Usage
 -----
-    python run_random_search.py --config iris_classification.yaml --n-samples 200
-    python run_random_search.py --config iris_classification.yaml --n-samples 500 --seed 99
-    python run_random_search.py --config iris_classification.yaml --n-samples 200 --output-dir ./results/random_search/iris
+    python run_bayesian_search.py --config iris_classification.yaml --n-samples 100
+    python run_bayesian_search.py --config iris_classification.yaml --n-samples 100 --n-initial 20
+    python run_bayesian_search.py --config iris_classification.yaml --n-samples 100 --acq-func EI
+    python run_bayesian_search.py --config iris_classification.yaml --n-samples 100 --output-dir ./results/bayes/iris
 
-The output Parquet file can be loaded by:
+The output Parquet file is identical in schema to grid search and random search outputs,
+and can be loaded by:
     - visualize_my_results.py / visualize_results.py
     - dashboard.py / landscape.py
     - exatune/analysis/complete_analysis.py
+
+How it works
+------------
+Bayesian optimization builds a surrogate model (Gaussian Process by default) over
+the observed (hyperparameters → score) landscape, then uses an acquisition function
+to decide which point to evaluate next — trading off exploration vs exploitation.
+
+Acquisition functions:
+  LCB  - Lower Confidence Bound (default, good general purpose)
+  EI   - Expected Improvement (aggressive, good when you want fast convergence)
+  PI   - Probability of Improvement (very exploitative)
+  gp_hedge - Probabilistic mix of LCB/EI/PI (robust, slightly slower)
 
 Carbon tracking
 ---------------
@@ -29,7 +46,6 @@ If codecarbon is not installed, both columns default to None.
 import argparse
 import hashlib
 import json
-import random
 import sys
 import time
 import traceback
@@ -65,45 +81,75 @@ def load_yaml(path: Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Hyperparameter sampling
+# Search space construction
 # ---------------------------------------------------------------------------
 
-def sample_hyperparameters(hp_config: dict, rng: random.Random) -> Dict[str, Any]:
+def build_search_space(hp_config: dict):
     """
-    Draw one random sample from the hyperparameter space defined in the YAML.
+    Convert ExaTune YAML hyperparameter config into skopt dimensions.
 
-    Supports:
-      type: categorical  → uniform draw from values list
-      type: int          → randint(low, high)   (inclusive)
-      type: float        → uniform(low, high)
-      type: log_float    → log-uniform(low, high)
+    Returns:
+        dimensions   : list of skopt dimension objects
+        param_names  : list of parameter names (same order)
+        cat_values   : dict mapping param_name -> list of possible values
     """
-    sample = {}
+    try:
+        from skopt.space import Categorical, Integer, Real
+    except ImportError:
+        print("ERROR: scikit-optimize is required. Install it with:")
+        print("  pip install scikit-optimize")
+        sys.exit(1)
+
+    dimensions = []
+    param_names = []
+    cat_values = {}
+
     for name, spec in hp_config.items():
         hp_type = spec.get("type", "categorical").lower()
+        param_names.append(name)
 
         if "values" in spec:
-            sample[name] = rng.choice(spec["values"])
+            vals = spec["values"]
+            safe_vals = [str(v) if v is None else v for v in vals]
+            dimensions.append(Categorical(safe_vals, name=name))
+            cat_values[name] = vals
 
         elif hp_type == "int":
-            low, high = int(spec["low"]), int(spec["high"])
-            sample[name] = rng.randint(low, high)
+            dimensions.append(Integer(int(spec["low"]), int(spec["high"]), name=name))
 
         elif hp_type == "float":
-            low, high = float(spec["low"]), float(spec["high"])
-            sample[name] = rng.uniform(low, high)
+            dimensions.append(Real(float(spec["low"]), float(spec["high"]), name=name))
 
         elif hp_type in ("log_float", "loguniform"):
-            low, high = float(spec["low"]), float(spec["high"])
-            log_val = rng.uniform(np.log(low), np.log(high))
-            sample[name] = float(np.exp(log_val))
+            dimensions.append(
+                Real(float(spec["low"]), float(spec["high"]), prior="log-uniform", name=name)
+            )
 
         else:
             raise ValueError(
-                f"Hyperparameter '{name}' has type '{hp_type}' but no 'values', 'low', or 'high' defined."
+                f"Hyperparameter '{name}' has type '{hp_type}' but no 'values', 'low', or 'high'."
             )
 
-    return sample
+    return dimensions, param_names, cat_values
+
+
+def decode_point(point: list, param_names: list, cat_values: dict) -> Dict[str, Any]:
+    """
+    Convert a skopt suggestion back to a hyperparameter dict,
+    restoring None values that were stringified for skopt compatibility.
+    """
+    hp = {}
+    for name, val in zip(param_names, point):
+        if name in cat_values:
+            originals = cat_values[name]
+            str_originals = [str(v) if v is None else v for v in originals]
+            try:
+                idx = str_originals.index(val)
+                val = originals[idx]
+            except ValueError:
+                pass
+        hp[name] = val
+    return hp
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +183,7 @@ def load_dataset(dataset_cfg: dict) -> Tuple[np.ndarray, np.ndarray]:
             df = pd.read_parquet(dataset_path)
         elif suffix == ".npz":
             data = np.load(dataset_path)
-            X = data["x_train"].reshape(-1, -1).astype("float32")
+            X = data["x_train"].reshape(-1, 784).astype("float32") / 255.0
             y = data["y_train"]
             return X, y
         else:
@@ -166,18 +212,16 @@ def create_model(model_cfg: dict, hyperparams: Dict[str, Any], random_seed: int)
         class_path = model_cfg.get("class_name") or model_cfg.get("class")
         if not class_path:
             raise ValueError("model.class_name is required for sklearn models")
-
         parts = class_path.rsplit(".", 1)
         if len(parts) == 2:
-            module_path, class_name = parts
             import importlib
-            module = importlib.import_module(module_path)
-            ModelClass = getattr(module, class_name)
+            module = importlib.import_module(parts[0])
+            ModelClass = getattr(module, parts[1])
         else:
-            raise ValueError(f"Invalid class_name: {class_path!r} — expected 'module.ClassName'")
+            raise ValueError(f"Invalid class_name: {class_path!r}")
 
         NO_RANDOM_STATE = {"KNeighborsClassifier", "SVC", "SVR", "NearestNeighbors"}
-        if class_name not in NO_RANDOM_STATE and "random_state" not in all_params:
+        if parts[1] not in NO_RANDOM_STATE and "random_state" not in all_params:
             all_params["random_state"] = random_seed
 
         return ModelClass(**all_params)
@@ -212,7 +256,6 @@ def run_cv(
     task = model_cfg.get("task", "classification")
     primary = eval_cfg.get("scoring", "accuracy")
     additional = eval_cfg.get("additional_metrics") or []
-
     scoring = [primary] + additional
 
     if task == "classification":
@@ -243,7 +286,7 @@ def build_flat_result(
     kg_co2: Optional[float] = None,
     energy_kwh: Optional[float] = None,
 ) -> Dict[str, Any]:
-    config_str = json.dumps(hyperparams, sort_keys=True)
+    config_str = json.dumps(hyperparams, sort_keys=True, default=str)
     config_hash = hashlib.md5(config_str.encode()).hexdigest()[:12]
 
     primary = eval_cfg.get("scoring", "accuracy")
@@ -303,7 +346,7 @@ def _make_tracker(output_dir: Path) -> Optional[object]:
     return EmissionsTracker(
         output_dir=str(output_dir),
         output_file="codecarbon_log.csv",
-        log_level="error",          # suppress verbose codecarbon output
+        log_level="error",
         save_to_file=True,
         tracking_mode="process",
     )
@@ -317,7 +360,7 @@ def _track_evaluation(tracker) -> Tuple[Optional[float], Optional[float]]:
     if tracker is None:
         return None, None
     try:
-        emissions = tracker.stop()          # kg CO2eq
+        emissions = tracker.stop()
         energy_kwh = tracker._total_energy.kWh if hasattr(tracker, "_total_energy") else None
         return (
             float(emissions) if emissions is not None else None,
@@ -328,18 +371,27 @@ def _track_evaluation(tracker) -> Tuple[Optional[float], Optional[float]]:
 
 
 # ---------------------------------------------------------------------------
-# Main runner
+# Main Bayesian search loop
 # ---------------------------------------------------------------------------
 
-def run_random_search(
+def run_bayesian_search(
     config_path: Path,
     n_samples: int,
+    n_initial: int,
+    acq_func: str,
     seed: int,
     output_dir: Optional[Path],
     verbose: bool,
 ) -> Path:
+    try:
+        from skopt import Optimizer
+    except ImportError:
+        print("ERROR: scikit-optimize is required. Install it with:")
+        print("  pip install scikit-optimize")
+        sys.exit(1)
+
     print("=" * 65)
-    print("  ExaTune Random Search")
+    print("  ExaTune Bayesian Search")
     print("=" * 65)
 
     cfg = load_yaml(config_path)
@@ -351,38 +403,56 @@ def run_random_search(
     eval_cfg  = cfg.get("evaluation", {})
 
     random_seed = seed if seed is not None else exp_cfg.get("random_seed", 42)
-    exp_name    = exp_cfg.get("name", "random_search")
+    exp_name    = exp_cfg.get("name", "bayesian_search")
 
     if output_dir is None:
-        base = Path(exp_cfg.get("output_dir", f"./results/random_search/{exp_name}"))
+        base = Path(exp_cfg.get("output_dir", f"./results/bayesian_search/{exp_name}"))
         output_dir = base
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    n_initial = min(n_initial, n_samples)
+
     carbon_status = "enabled" if _CODECARBON_AVAILABLE else "disabled (pip install codecarbon)"
-    print(f"  Config      : {config_path}")
-    print(f"  Experiment  : {exp_name}")
-    print(f"  Dataset     : {ds_cfg.get('name', ds_cfg.get('path', '?'))}")
-    print(f"  Model       : {model_cfg.get('class_name', model_cfg.get('type', '?'))}")
-    print(f"  n_samples   : {n_samples}")
-    print(f"  seed        : {random_seed}")
-    print(f"  Output dir  : {output_dir}")
-    print(f"  Carbon      : {carbon_status}")
+    print(f"  Config       : {config_path}")
+    print(f"  Experiment   : {exp_name}")
+    print(f"  Dataset      : {ds_cfg.get('name', ds_cfg.get('path', '?'))}")
+    print(f"  Model        : {model_cfg.get('class_name', model_cfg.get('type', '?'))}")
+    print(f"  n_samples    : {n_samples}  (initial random: {n_initial}, Bayesian: {n_samples - n_initial})")
+    print(f"  acq_func     : {acq_func}")
+    print(f"  seed         : {random_seed}")
+    print(f"  Output dir   : {output_dir}")
+    print(f"  Carbon       : {carbon_status}")
     print("=" * 65)
 
     print("\n[1/3] Loading dataset...")
     X, y = load_dataset(ds_cfg)
     print(f"  Shape: X={X.shape}, y={y.shape}")
 
-    rng = random.Random(random_seed)
-    np.random.seed(random_seed)
+    print("\n[2/3] Building search space and optimizer...")
+    dimensions, param_names, cat_values = build_search_space(hp_cfg)
+    print(f"  Dimensions   : {len(dimensions)}")
+    for name, dim in zip(param_names, dimensions):
+        print(f"    {name}: {dim}")
 
-    print(f"\n[2/3] Running {n_samples} random evaluations...")
+    optimizer = Optimizer(
+        dimensions=dimensions,
+        base_estimator="GP",
+        acq_func=acq_func,
+        acq_optimizer="auto",
+        n_initial_points=n_initial,
+        random_state=random_seed,
+    )
+
+    print(f"\n[3/3] Running {n_samples} evaluations...")
     rows: List[Dict[str, Any]] = []
+    best_score = -np.inf
     start_total = time.time()
 
     for i in range(n_samples):
-        hyperparams = sample_hyperparameters(hp_cfg, rng)
+        suggestion = optimizer.ask()
+        hyperparams = decode_point(suggestion, param_names, cat_values)
+        phase = "init" if i < n_initial else "bayes"
         t0 = time.time()
 
         # Start per-evaluation carbon tracker
@@ -402,35 +472,40 @@ def run_random_search(
                 kg_co2=kg_co2,
                 energy_kwh=energy_kwh,
             )
+            score = flat["mean_score"]
             elapsed = time.time() - t0
+
+            optimizer.tell(suggestion, -score)
+
+            if score > best_score:
+                best_score = score
 
             if verbose:
                 co2_str = f"  co2={kg_co2*1e6:.2f}µg" if kg_co2 is not None else ""
-                print(f"  [{i+1:>{len(str(n_samples))}}/{n_samples}] "
-                      f"score={flat['mean_score']:.4f} ± {flat['std_score']:.4f}  "
-                      f"params={hyperparams}  ({elapsed:.2f}s){co2_str}")
+                print(f"  [{i+1:>{len(str(n_samples))}}/{n_samples}] [{phase}] "
+                      f"score={score:.4f} ± {flat['std_score']:.4f}  "
+                      f"best={best_score:.4f}  params={hyperparams}  ({elapsed:.2f}s){co2_str}")
             else:
                 pct = (i + 1) / n_samples
-                bar = int(pct * 40)
+                bar = int(pct * 38)
                 eta = (time.time() - start_total) / (i + 1) * (n_samples - i - 1)
                 print(
-                    f"\r  [{'█' * bar}{'░' * (40 - bar)}] "
-                    f"{i+1}/{n_samples}  "
-                    f"best={max((r['mean_score'] for r in rows + [flat] if r['mean_score'] is not None), default=0):.4f}  "
-                    f"ETA {eta:.0f}s   ",
+                    f"\r  [{phase}] [{'█' * bar}{'░' * (38 - bar)}] "
+                    f"{i+1}/{n_samples}  best={best_score:.4f}  ETA {eta:.0f}s   ",
                     end="", flush=True,
                 )
 
         except Exception as e:
-            # Make sure tracker is stopped even on failure
-            _track_evaluation(tracker)
+            _track_evaluation(tracker)  # stop tracker even on failure
             flat = build_flat_result(
                 i, hyperparams, {}, eval_cfg,
                 success=False, error_message=str(e),
                 kg_co2=None, energy_kwh=None,
             )
+            optimizer.tell(suggestion, 0.0)
+
             if verbose:
-                print(f"  [{i+1}/{n_samples}] FAILED: {e}")
+                print(f"  [{i+1}/{n_samples}] [{phase}] FAILED: {e}")
 
         rows.append(flat)
 
@@ -441,7 +516,7 @@ def run_random_search(
     print(f"\n  Completed {n_samples} evaluations in {elapsed_total:.1f}s "
           f"({elapsed_total/n_samples:.2f}s/eval)")
 
-    print("\n[3/3] Saving results...")
+    print("\n  Saving results...")
     df = pd.DataFrame(rows)
 
     parquet_path = output_dir / "results.parquet"
@@ -452,11 +527,27 @@ def run_random_search(
     df.to_csv(csv_path, index=False)
     print(f"  CSV     : {csv_path}")
 
-    # Top-5 results
+    # Convergence summary
     successful = df[df["success"] == True].copy()
     if not successful.empty:
+        successful = successful.reset_index(drop=True)
+        successful["best_so_far"] = successful["mean_score"].cummax()
+
+        print("\n  Convergence (score improvement over evaluations):")
+        checkpoints = [n_initial - 1] + [
+            int(n_initial + (n_samples - n_initial) * f) - 1
+            for f in [0.25, 0.5, 0.75, 1.0]
+            if int(n_initial + (n_samples - n_initial) * f) - 1 < len(successful)
+        ]
+        checkpoints = sorted(set(max(0, c) for c in checkpoints))
+        print(f"  {'Eval':>6}  {'Phase':<6}  {'Best score':>10}")
+        print(f"  {'-'*6}  {'-'*6}  {'-'*10}")
+        for c in checkpoints:
+            phase = "init" if c < n_initial else "bayes"
+            print(f"  {c+1:>6}  {phase:<6}  {successful.loc[c, 'best_so_far']:>10.4f}")
+
         top5 = successful.nlargest(5, "mean_score")
-        print("\n  Top 5 configurations:")
+        print(f"\n  Top 5 configurations:")
         print(f"  {'Rank':<5} {'Score':>8} {'± Std':>8}  Hyperparameters")
         print(f"  {'-'*5} {'-'*8} {'-'*8}  {'-'*40}")
         for rank, (_, row) in enumerate(top5.iterrows(), 1):
@@ -475,7 +566,7 @@ def run_random_search(
         total_co2 = df["kg_co2"].sum(skipna=True)
         total_kwh = df["energy_kwh"].sum(skipna=True)
         print(f"\n  Carbon summary (all evaluations):")
-        print(f"    Total CO₂  : {total_co2*1000:.4f} g CO₂eq")
+        print(f"    Total CO₂   : {total_co2*1000:.4f} g CO₂eq")
         print(f"    Total energy: {total_kwh*1000:.4f} Wh")
         print(f"    Per eval avg: {total_co2/n_samples*1e6:.2f} µg CO₂eq")
 
@@ -497,33 +588,48 @@ def run_random_search(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="ExaTune random hyperparameter search — compatible with all ExaTune visualizations",
+        description="ExaTune Bayesian hyperparameter search — compatible with all ExaTune visualizations",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Requires:  pip install scikit-optimize
+
 Examples:
-  # 200 random samples from the Iris config
-  python run_random_search.py --config iris_classification.yaml --n-samples 200
+  # 100 evaluations (20 random init + 80 Bayesian)
+  python run_bayesian_search.py --config iris_classification.yaml --n-samples 100
 
-  # 500 samples with a fixed seed and custom output dir
-  python run_random_search.py --config iris_classification.yaml --n-samples 500 \\
-      --seed 99 --output-dir ./results/random_iris
+  # More initial random points before Bayesian kicks in
+  python run_bayesian_search.py --config iris_classification.yaml --n-samples 150 --n-initial 30
 
-  # Verbose per-sample output (includes per-eval CO2)
-  python run_random_search.py --config iris_classification.yaml --n-samples 100 --verbose
+  # Use Expected Improvement acquisition function
+  python run_bayesian_search.py --config iris_classification.yaml --n-samples 100 --acq-func EI
+
+  # Verbose output (includes per-eval CO2)
+  python run_bayesian_search.py --config iris_classification.yaml --n-samples 100 --verbose
 
 Carbon emissions:
   Install codecarbon to enable per-evaluation CO2 tracking:
     pip install codecarbon
   Results are saved as kg_co2 and energy_kwh columns in the output Parquet.
 
+Acquisition functions:
+  LCB      Lower Confidence Bound (default, balanced exploration/exploitation)
+  EI       Expected Improvement (faster convergence, more exploitative)
+  PI       Probability of Improvement (very exploitative)
+  gp_hedge Probabilistic mix — robust but slower
+
 Visualizing results:
-  df = pd.read_parquet("./results/random_search/iris_rf_benchmark/results.parquet")
+  df = pd.read_parquet("./results/bayesian_search/.../results.parquet")
         """,
     )
     parser.add_argument("--config", "-c", type=Path, required=True,
                         help="Path to ExaTune YAML configuration file")
     parser.add_argument("--n-samples", "-n", type=int, default=100,
-                        help="Number of random configurations to evaluate (default: 100)")
+                        help="Total number of configurations to evaluate (default: 100)")
+    parser.add_argument("--n-initial", type=int, default=10,
+                        help="Number of initial random evaluations before Bayesian kicks in (default: 10)")
+    parser.add_argument("--acq-func", type=str, default="LCB",
+                        choices=["LCB", "EI", "PI", "gp_hedge"],
+                        help="Acquisition function (default: LCB)")
     parser.add_argument("--seed", "-s", type=int, default=None,
                         help="Random seed (overrides YAML experiment.random_seed)")
     parser.add_argument("--output-dir", "-o", type=Path, default=None,
@@ -539,11 +645,16 @@ Visualizing results:
     if args.n_samples < 1:
         print("Error: --n-samples must be >= 1")
         sys.exit(1)
+    if args.n_initial < 1:
+        print("Error: --n-initial must be >= 1")
+        sys.exit(1)
 
     try:
-        run_random_search(
+        run_bayesian_search(
             config_path=args.config,
             n_samples=args.n_samples,
+            n_initial=args.n_initial,
+            acq_func=args.acq_func,
             seed=args.seed,
             output_dir=args.output_dir,
             verbose=args.verbose,

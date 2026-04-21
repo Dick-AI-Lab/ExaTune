@@ -80,8 +80,7 @@ hyperparameters:
   gamma:
     type: "float"
     values: [0] # 4
-examples\parquet\parquet_neurips
-# hyperparameters:
+
 #   n_estimators:
 #     type: "int"
 #     values: [25, 50,75, 100,125, 150, 175, 200, 225, 250, 275, 300]
@@ -105,7 +104,7 @@ examples\parquet\parquet_neurips
 #     values: [0]
 dataset:
   name: "titanic"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/titanic.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/titanic.csv"
   target_column: "2urvived"
   test_size: 0.2
   random_state: 42

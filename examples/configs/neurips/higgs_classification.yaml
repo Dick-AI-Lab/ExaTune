@@ -50,7 +50,7 @@ hyperparameters:
 
 dataset:
   name: "higgs"
-  path: "/home/klons06/scratch/Exatune/ExaTune/examples/data/neurips/higgs_boson_encoded.csv"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/higgs_boson_encoded.csv"
   target_column: "Label"
   test_size: 0.2
   random_state: 42
