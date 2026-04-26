@@ -54,7 +54,7 @@ hyperparameters:
 
 dataset:
   name: "diabetes"
-  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/diabetes.csv"
+  path: "/scratch/klons06/Exatune/ExaTune/examples/data/neurips/diabetes.csv"
   target_column: "Outcome"
   test_size: 0.2
   random_state: 42
@@ -71,7 +71,7 @@ evaluation:
   n_jobs: 1
 
 slurm:
-  time: "00:10:00"
+  time: "06:10:00"
   memory: "2G"
   cpus_per_task: 2
   nodes: 1
