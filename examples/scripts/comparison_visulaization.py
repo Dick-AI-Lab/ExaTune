@@ -1,38 +1,6 @@
 #!/usr/bin/env python3
 """
 ExaTune Search Comparison Visualizer
-======================================
-Overlays results from grid search, random search, and/or Bayesian search on
-shared 3D landscape surfaces and heatmaps so you can visually compare where
-each search method sampled and how well it performed.
-
-Changes vs previous version:
-  - Heatmap best markers:
-      Random best   → black dotted square outline
-      Bayesian best → black solid square outline
-  - Legend now includes coverage % (cells visited / total cells) per search type
-  - 3D surfaces (static + Plotly) now show best markers for overall peak,
-    best random, and best Bayesian — each with a distinct marker and drop line
-
-Usage
------
-    python visualize_search_comparison.py \\
-        --random   ./results/random_search/iris/results.parquet \\
-        --bayesian ./results/bayesian_search/iris/results.parquet \\
-        --config   iris_classification.yaml \\
-        --x-param  n_estimators --y-param max_depth
-
-    python visualize_search_comparison.py \\
-        --grid     ./results/benchmarks/iris_rf/results.parquet \\
-        --random   ./results/random_search/iris/results.parquet \\
-        --bayesian ./results/bayesian_search/iris/results.parquet \\
-        --config   iris_classification.yaml --all-pairs
-
-    python visualize_search_comparison.py \\
-        --random   ./results/random_search/iris/results.parquet \\
-        --bayesian ./results/bayesian_search/iris/results.parquet \\
-        --config   iris_classification.yaml \\
-        --metric   f1_macro_mean --output-dir ./comparison_plots
 """
 
 import argparse
@@ -52,11 +20,6 @@ import plotly.graph_objects as go
 import yaml
 
 warnings.filterwarnings("ignore")
-
-
-# ---------------------------------------------------------------------------
-# Search type registry — colors, markers, labels
-# ---------------------------------------------------------------------------
 
 SEARCH_STYLES: Dict[str, dict] = {
     "grid": {
@@ -85,24 +48,15 @@ SEARCH_STYLES: Dict[str, dict] = {
     },
 }
 
-# Overall peak outline on heatmap
-_PEAK_COLOR = "#D63384"
-_PEAK_LW    = 3.0
+_PEAK_COLOR          = "#D63384"
+_PEAK_LW             = 3.0
+_BEST_RANDOM_COLOR   = "black"
+_BEST_BAYESIAN_COLOR = "black"
+_BEST_OVERALL_COLOR  = "#00E676"
+_GLYPH_SIZE_NORMAL   = 55
+_GLYPH_SIZE_BEST     = 130
+_STAR_SIZE           = 60
 
-# Best-marker colors on 3D surfaces
-_BEST_RANDOM_COLOR   = "black"   # orange
-_BEST_BAYESIAN_COLOR = "black"   # pink
-_BEST_OVERALL_COLOR  = "#00E676"   # bright green
-
-# Glyph sizing (heatmap scatter markers)
-_GLYPH_SIZE_NORMAL = 55
-_GLYPH_SIZE_BEST   = 130
-_STAR_SIZE         = 60
-
-
-# ---------------------------------------------------------------------------
-# YAML helpers
-# ---------------------------------------------------------------------------
 
 def load_yaml(path: Path) -> dict:
     with open(path, "r") as f:
@@ -113,23 +67,14 @@ def get_hp_names(config: dict) -> List[str]:
     return list(config.get("hyperparameters", {}).keys())
 
 
-# ---------------------------------------------------------------------------
-# Parquet loading and normalisation
-# ---------------------------------------------------------------------------
-
 def load_and_tag(path: Path, search_type: str) -> pd.DataFrame:
     df = pd.read_parquet(path)
 
-    # Normalise column names:
-    #   hyperparameters.X        → X
-    #   additional_metrics.X.mean → X_mean
-    #   additional_metrics.X.std  → X_std
-    #   additional_metrics.X     → X   (fallback)
     def _norm(c: str) -> str:
         if c.startswith("hyperparameters."):
             return c[len("hyperparameters."):]
         if c.startswith("additional_metrics."):
-            rest = c[len("additional_metrics."):]   # e.g. "f1_macro.mean"
+            rest = c[len("additional_metrics."):]
             if rest.endswith(".mean"):
                 return rest[:-5].replace(".", "_") + "_mean"
             if rest.endswith(".std"):
@@ -145,9 +90,7 @@ def load_and_tag(path: Path, search_type: str) -> pd.DataFrame:
     return df
 
 
-def load_all(
-    paths: Dict[str, Optional[Path]]
-) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+def load_all(paths: Dict[str, Optional[Path]]) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
     per_type: Dict[str, pd.DataFrame] = {}
     for stype, path in paths.items():
         if path is None:
@@ -167,13 +110,7 @@ def load_all(
     return combined, per_type
 
 
-# ---------------------------------------------------------------------------
-# Pivot / aggregation helpers
-# ---------------------------------------------------------------------------
-
-def build_pivot(
-    df: pd.DataFrame, x_param: str, y_param: str, metric: str
-) -> pd.DataFrame:
+def build_pivot(df: pd.DataFrame, x_param: str, y_param: str, metric: str) -> pd.DataFrame:
     needed = [x_param, y_param, metric]
     sub = df.dropna(subset=needed)
     agg = sub.groupby([y_param, x_param])[metric].mean().reset_index()
@@ -192,22 +129,45 @@ def build_pivot(
 
 def get_best_per_search(
     per_type: Dict[str, pd.DataFrame],
+    pivot: pd.DataFrame,
     x_param: str,
     y_param: str,
     metric: str,
-) -> Dict[str, pd.Series]:
-    bests = {}
+) -> Dict[str, Tuple[int, int, float]]:
+    """
+    For each search type, find the pivot cell (col_i, row_i) that has the
+    highest *pivot* value (not the raw per-row metric) among cells that search
+    type actually visited.  Returns a dict mapping stype -> (col_i, row_i, z_val).
+    """
+    Z = pivot.values.astype(float)
+    bests: Dict[str, Tuple[int, int, float]] = {}
+
     for stype, df in per_type.items():
         sub = df.dropna(subset=[x_param, y_param, metric])
         if sub.empty:
             continue
-        bests[stype] = sub.loc[sub[metric].idxmax()]
+
+        best_z: Optional[float] = None
+        best_cell: Optional[Tuple[int, int]] = None
+
+        for _, row_data in sub.iterrows():
+            col_i, row_i = pivot_coords(pivot, row_data[x_param], row_data[y_param])
+            if col_i is None or row_i is None:
+                continue
+            z_val = Z[row_i, col_i]
+            if np.isnan(z_val):
+                continue
+            if best_z is None or z_val > best_z:
+                best_z = z_val
+                best_cell = (col_i, row_i)
+
+        if best_cell is not None and best_z is not None:
+            bests[stype] = (best_cell[0], best_cell[1], best_z)
+
     return bests
 
 
-def pivot_coords(
-    pivot: pd.DataFrame, x_val, y_val
-) -> Tuple[Optional[int], Optional[int]]:
+def pivot_coords(pivot: pd.DataFrame, x_val, y_val) -> Tuple[Optional[int], Optional[int]]:
     x_labels = [str(v) for v in pivot.columns]
     y_labels = [str(v) for v in pivot.index]
 
@@ -218,9 +178,15 @@ def pivot_coords(
         try:
             numeric = [float(v) for v in labels]
             fv = float(val)
-            for i, v in enumerate(numeric):
-                if abs(v - fv) < 1e-9:
-                    return i
+            # Use nearest-neighbour snap so sampled values land on the right cell
+            dists = [abs(v - fv) for v in numeric]
+            idx = int(np.argmin(dists))
+            if dists[idx] < 1e-6 * (max(numeric) - min(numeric) + 1e-9):
+                return idx
+            # Slightly looser: accept the nearest cell within 5% of range
+            rng = max(numeric) - min(numeric) if len(numeric) > 1 else 1.0
+            if dists[idx] <= 0.05 * rng + 1e-9:
+                return idx
         except (ValueError, TypeError):
             pass
         return None
@@ -228,20 +194,12 @@ def pivot_coords(
     return _find(x_labels, x_val), _find(y_labels, y_val)
 
 
-# ---------------------------------------------------------------------------
-# Coverage calculation
-# ---------------------------------------------------------------------------
-
 def compute_coverage(
     per_type: Dict[str, pd.DataFrame],
     pivot: pd.DataFrame,
     x_param: str,
     y_param: str,
 ) -> Dict[str, float]:
-    """
-    Return fraction of pivot cells visited by each search type.
-    Grid search covers the full plane by definition → 100%.
-    """
     total_cells = pivot.shape[0] * pivot.shape[1]
     coverage = {}
     for stype, df in per_type.items():
@@ -258,54 +216,34 @@ def compute_coverage(
     return coverage
 
 
-# ---------------------------------------------------------------------------
-# Heatmap best-cell square drawing helpers
-# ---------------------------------------------------------------------------
-
 def _draw_best_square_random(ax, col: int, row: int, zorder: int = 7) -> None:
-    """Black dotted square outline — marks best random search cell."""
     rect = mpatches.FancyBboxPatch(
         (col - 0.44, row - 0.44), 0.88, 0.88,
-        boxstyle="square,pad=0",
-        linewidth=2.5,
-        edgecolor="black",
-        facecolor="none",
-        linestyle=(0, (4, 3)),   # dotted
-        zorder=zorder,
+        boxstyle="square,pad=0", linewidth=2.5,
+        edgecolor="black", facecolor="none",
+        linestyle=(0, (4, 3)), zorder=zorder,
     )
     ax.add_patch(rect)
 
 
 def _draw_best_square_bayesian(ax, col: int, row: int, zorder: int = 7) -> None:
-    """Black solid square outline — marks best Bayesian search cell."""
     rect = mpatches.FancyBboxPatch(
         (col - 0.44, row - 0.44), 0.88, 0.88,
-        boxstyle="square,pad=0",
-        linewidth=2.5,
-        edgecolor="black",
-        facecolor="none",
-        linestyle="solid",
-        zorder=zorder,
+        boxstyle="square,pad=0", linewidth=2.5,
+        edgecolor="black", facecolor="none",
+        linestyle="solid", zorder=zorder,
     )
     ax.add_patch(rect)
 
 
 def _draw_peak_box(ax, col: int, row: int, color: str, lw: float, zorder: int = 5) -> None:
-    """Colored outline for the overall peak cell."""
     rect = mpatches.FancyBboxPatch(
         (col - 0.47, row - 0.47), 0.94, 0.94,
-        boxstyle="square,pad=0",
-        linewidth=lw,
-        edgecolor=color,
-        facecolor="none",
-        zorder=zorder,
+        boxstyle="square,pad=0", linewidth=lw,
+        edgecolor=color, facecolor="none", zorder=zorder,
     )
     ax.add_patch(rect)
 
-
-# ---------------------------------------------------------------------------
-# 2D Heatmap
-# ---------------------------------------------------------------------------
 
 def plot_comparison_heatmap(
     combined: pd.DataFrame,
@@ -328,12 +266,10 @@ def plot_comparison_heatmap(
         figsize=(max(9, n_cols * 0.9 + 2), max(7, n_rows * 0.75 + 2))
     )
 
-    im = ax.imshow(Z, aspect="auto", origin="upper",
-                   cmap="viridis", interpolation="nearest")
+    im = ax.imshow(Z, aspect="auto", origin="upper", cmap="viridis", interpolation="nearest")
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label(metric, fontsize=11)
 
-    # Cell value annotations
     z_min, z_max = np.nanmin(Z), np.nanmax(Z)
     z_mid = (z_min + z_max) / 2.0
     for row in range(n_rows):
@@ -342,21 +278,18 @@ def plot_comparison_heatmap(
             if np.isnan(val):
                 continue
             text_color = "white" if val < z_mid else "#1a1a1a"
-            ax.text(col, row + 0.18, f"{val:.3f}",
-                    ha="center", va="center",
+            ax.text(col, row + 0.18, f"{val:.3f}", ha="center", va="center",
                     color=text_color, fontsize=7, zorder=3)
 
-    # Overall peak — colored border
+    overall_peak_cell: Optional[Tuple[int, int]] = None
     if not np.all(np.isnan(Z)):
         pr, pc = np.unravel_index(np.nanargmax(Z), Z.shape)
         _draw_peak_box(ax, pc, pr, _PEAK_COLOR, lw=_PEAK_LW, zorder=5)
+        overall_peak_cell = (pc, pr)
 
-    # Per-search best squares on heatmap cells
     non_grid_types = [s for s in per_type if s != "grid"]
-    bests = get_best_per_search(per_type, x_param, y_param, metric)
-
-    # Overall peak cell (set above)
-    overall_peak_cell = (pc, pr) if not np.all(np.isnan(Z)) else None
+    # FIX: use pivot-based best so markers reflect actual landscape peaks
+    bests = get_best_per_search(per_type, pivot, x_param, y_param, metric)
 
     best_cells: Dict[str, Optional[Tuple[int, int]]] = {}
     found_overall: Dict[str, bool] = {}
@@ -365,12 +298,10 @@ def plot_comparison_heatmap(
             best_cells[stype] = None
             found_overall[stype] = False
             continue
-        best_row = bests[stype]
-        col_i, row_i = pivot_coords(pivot, best_row[x_param], best_row[y_param])
-        best_cells[stype] = (col_i, row_i) if col_i is not None else None
+        col_i, row_i, _ = bests[stype]
+        best_cells[stype] = (col_i, row_i)
         found_overall[stype] = (overall_peak_cell == (col_i, row_i))
 
-    # Draw best-cell squares only when the search did NOT find the overall peak
     if best_cells.get("random") is not None and not found_overall.get("random"):
         c, r = best_cells["random"]
         _draw_best_square_random(ax, c, r, zorder=7)
@@ -379,7 +310,6 @@ def plot_comparison_heatmap(
         c, r = best_cells["bayesian"]
         _draw_best_square_bayesian(ax, c, r, zorder=7)
 
-    # Glyph markers (visited cells)
     visited: Dict[str, set] = {}
     for stype in non_grid_types:
         cells = set()
@@ -401,20 +331,16 @@ def plot_comparison_heatmap(
     glyph_scatter_args = []
     for (col_i, row_i) in all_cells:
         types_here = [s for s in non_grid_types if (col_i, row_i) in visited[s]]
-
         if len(types_here) == 1:
             y_positions = {types_here[0]: row_i + GLYPH_Y_OFF}
         else:
             order = [s for s in ["random", "bayesian"] if s in types_here]
             y_positions = {s: row_i + GLYPH_Y_OFF + k * GLYPH_Y_SEP
                            for k, s in enumerate(order)}
-
         x_glyph = col_i + GLYPH_X_OFF
-
         for stype in types_here:
             y_glyph = y_positions[stype]
             color = SEARCH_STYLES[stype]["color"]
-
             if stype == "random":
                 glyph_scatter_args.append(dict(
                     x=x_glyph, y=y_glyph, s=_GLYPH_SIZE_NORMAL,
@@ -431,7 +357,6 @@ def plot_comparison_heatmap(
     for kwargs in glyph_scatter_args:
         ax.scatter(**kwargs)
 
-    # Axis labels
     ax.set_xticks(range(n_cols))
     ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=9)
     ax.set_yticks(range(n_rows))
@@ -444,18 +369,14 @@ def plot_comparison_heatmap(
         title = f"{metric} heatmap: {x_param} × {y_param}\n{search_names}"
     ax.set_title(title, fontsize=12, pad=10)
 
-    # ── Legend ──
     legend_handles = [
         mpatches.Patch(edgecolor=_PEAK_COLOR, facecolor="none",
                        linewidth=_PEAK_LW, label="Overall Peak"),
     ]
-
     for stype in non_grid_types:
         style = SEARCH_STYLES[stype]
         color = style["color"]
         cov_pct = coverage.get(stype, 0.0) * 100
-
-        # Visited glyph
         if stype == "random":
             legend_handles.append(
                 plt.scatter([], [], s=_GLYPH_SIZE_NORMAL,
@@ -471,41 +392,26 @@ def plot_comparison_heatmap(
                             label=f"{style['label']} (visited, coverage={cov_pct:.1f}%)")
             )
 
-    # Best-cell square legend entries — or "found overall best" note if applicable
     if "random" in non_grid_types:
         if found_overall.get("random"):
             legend_handles.append(
                 mpatches.Patch(facecolor="none", edgecolor="black", linewidth=0,
-                               label=f"Random ✓ found overall best")
-            )
+                               label="Random ✓ found overall best"))
         else:
             legend_handles.append(
-                mpatches.FancyBboxPatch(
-                    (0, 0), 1, 1,
-                    boxstyle="square,pad=0",
-                    linewidth=2.5, edgecolor="black", facecolor="none",
-                    linestyle=(0, (4, 3)),
-                    label="Random best cell",
-                )
-            )
+                mpatches.FancyBboxPatch((0, 0), 1, 1, boxstyle="square,pad=0",
+                                        linewidth=2.5, edgecolor="black", facecolor="none",
+                                        linestyle=(0, (4, 3)), label="Random best cell"))
     if "bayesian" in non_grid_types:
         if found_overall.get("bayesian"):
             legend_handles.append(
                 mpatches.Patch(facecolor="none", edgecolor="black", linewidth=0,
-                               label=f"Bayesian ✓ found overall best")
-            )
+                               label="Bayesian ✓ found overall best"))
         else:
             legend_handles.append(
-                mpatches.FancyBboxPatch(
-                    (0, 0), 1, 1,
-                    boxstyle="square,pad=0",
-                    linewidth=2.5, edgecolor="black", facecolor="none",
-                    linestyle="solid",
-                    label="Bayesian best cell",
-                )
-            )
-
-    # Grid search is the landscape surface itself — no legend entry needed
+                mpatches.FancyBboxPatch((0, 0), 1, 1, boxstyle="square,pad=0",
+                                        linewidth=2.5, edgecolor="black", facecolor="none",
+                                        linestyle="solid", label="Bayesian best cell"))
 
     ax.legend(handles=legend_handles, loc="upper left",
               bbox_to_anchor=(1.18, 1.0), bbox_transform=ax.transAxes,
@@ -518,10 +424,6 @@ def plot_comparison_heatmap(
     print(f"    Saved heatmap → {output_path}")
 
 
-# ---------------------------------------------------------------------------
-# Static 3D surface — best markers for overall, random, Bayesian
-# ---------------------------------------------------------------------------
-
 def plot_comparison_surface_static(
     combined: pd.DataFrame,
     per_type: Dict[str, pd.DataFrame],
@@ -533,87 +435,82 @@ def plot_comparison_surface_static(
 ) -> None:
     pivot = build_pivot(combined, x_param, y_param, metric)
     Z = pivot.values.astype(float)
+    n_rows, n_cols = Z.shape
     x_labels = list(pivot.columns)
     y_labels = list(pivot.index)
-    X, Y = np.meshgrid(range(len(x_labels)), range(len(y_labels)))
+    X, Y = np.meshgrid(range(n_cols), range(n_rows))
 
     coverage = compute_coverage(per_type, pivot, x_param, y_param)
 
     fig = plt.figure(figsize=(13, 9))
     ax = fig.add_subplot(111, projection="3d")
 
+    # FIX: Do NOT flip Z or Y here — plot the surface with raw (col, row) coords.
+    # All scatter points will use the same (col_i, row_i) coords, no flip needed.
     surf = ax.plot_surface(X, Y, Z, cmap="viridis", alpha=0.75, edgecolor="none")
     fig.colorbar(surf, ax=ax, shrink=0.45, aspect=10, label=metric)
 
     z_range = np.nanmax(Z) - np.nanmin(Z) if not np.all(np.isnan(Z)) else 0.0
     z_offset = z_range * 0.12
 
-    # ── Overall peak ──
+    overall_peak_cell: Optional[Tuple[int, int]] = None
     if not np.all(np.isnan(Z)):
         pr, pc = np.unravel_index(np.nanargmax(Z), Z.shape)
         peak_z = Z[pr, pc]
+        overall_peak_cell = (pc, pr)
+        # FIX: use raw row index (pr), no flip
         ax.scatter([pc], [pr], [peak_z + z_offset],
                    color=_BEST_OVERALL_COLOR, s=140, marker="*",
                    zorder=10, label=f"Overall Peak ({peak_z:.4f})")
         ax.plot([pc, pc], [pr, pr], [peak_z, peak_z + z_offset],
                 color=_BEST_OVERALL_COLOR, linestyle="--", linewidth=1.5)
 
-    bests = get_best_per_search(per_type, x_param, y_param, metric)
-
-    # Determine overall peak cell for comparison
-    overall_peak_cell = None
-    if not np.all(np.isnan(Z)):
-        overall_peak_cell = (pc, pr)  # (col, row) set above
+    # FIX: use pivot-based best so markers are at the correct landscape peak
+    bests = get_best_per_search(per_type, pivot, x_param, y_param, metric)
 
     # ── Best Random ──
     if "random" in bests:
-        br = bests["random"]
-        col_i, row_i = pivot_coords(pivot, br[x_param], br[y_param])
-        if col_i is not None and row_i is not None:
-            z_val = Z[row_i, col_i]
-            if not np.isnan(z_val):
-                cov_pct = coverage.get("random", 0.0) * 100
-                found_overall = (overall_peak_cell == (col_i, row_i))
-                if found_overall:
-                    # Just a legend entry — no extra marker needed
-                    ax.scatter([], [], [], color=_BEST_RANDOM_COLOR, s=0,
-                               label=f"Random ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)")
-                else:
-                    ax.scatter([col_i], [row_i], [z_val + z_offset],
-                               color=_BEST_RANDOM_COLOR, s=120, marker="^",
-                               zorder=10,
-                               label=f"Random best ({z_val:.4f}, cov={cov_pct:.1f}%)")
-                    ax.plot([col_i, col_i], [row_i, row_i], [z_val, z_val + z_offset],
-                            color=_BEST_RANDOM_COLOR, linestyle="--", linewidth=1.2)
+        col_i, row_i, z_val = bests["random"]
+        cov_pct = coverage.get("random", 0.0) * 100
+        found_overall = (overall_peak_cell == (col_i, row_i))
+        if found_overall:
+            ax.scatter([], [], [], color=_BEST_RANDOM_COLOR, s=0,
+                       label=f"Random ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)")
+        else:
+            # FIX: use raw row_i, no flip
+            ax.scatter([col_i], [row_i], [z_val + z_offset],
+                       color=_BEST_RANDOM_COLOR, s=120, marker="^",
+                       zorder=10,
+                       label=f"Random best ({z_val:.4f}, cov={cov_pct:.1f}%)")
+            ax.plot([col_i, col_i], [row_i, row_i],
+                    [z_val, z_val + z_offset],
+                    color=_BEST_RANDOM_COLOR, linestyle="--", linewidth=1.2)
 
     # ── Best Bayesian ──
     if "bayesian" in bests:
-        bb = bests["bayesian"]
-        col_i, row_i = pivot_coords(pivot, bb[x_param], bb[y_param])
-        if col_i is not None and row_i is not None:
-            z_val = Z[row_i, col_i]
-            if not np.isnan(z_val):
-                cov_pct = coverage.get("bayesian", 0.0) * 100
-                found_overall = (overall_peak_cell == (col_i, row_i))
-                if found_overall:
-                    ax.scatter([], [], [], color=_BEST_BAYESIAN_COLOR, s=0,
-                               label=f"Bayesian ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)")
-                else:
-                    ax.scatter([col_i], [row_i], [z_val + z_offset],
-                               color=_BEST_BAYESIAN_COLOR, s=120, marker="D",
-                               zorder=10,
-                               label=f"Bayesian best ({z_val:.4f}, cov={cov_pct:.1f}%)")
-                    ax.plot([col_i, col_i], [row_i, row_i], [z_val, z_val + z_offset],
-                            color=_BEST_BAYESIAN_COLOR, linestyle="--", linewidth=1.2)
+        col_i, row_i, z_val = bests["bayesian"]
+        cov_pct = coverage.get("bayesian", 0.0) * 100
+        found_overall = (overall_peak_cell == (col_i, row_i))
+        if found_overall:
+            ax.scatter([], [], [], color=_BEST_BAYESIAN_COLOR, s=0,
+                       label=f"Bayesian ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)")
+        else:
+            # FIX: use raw row_i, no flip
+            ax.scatter([col_i], [row_i], [z_val + z_offset],
+                       color=_BEST_BAYESIAN_COLOR, s=120, marker="D",
+                       zorder=10,
+                       label=f"Bayesian best ({z_val:.4f}, cov={cov_pct:.1f}%)")
+            ax.plot([col_i, col_i], [row_i, row_i],
+                    [z_val, z_val + z_offset],
+                    color=_BEST_BAYESIAN_COLOR, linestyle="--", linewidth=1.2)
 
-    # ── All sampled points (random + Bayesian only; grid IS the surface) ──
+    # ── All sampled points ──
     for stype, df in per_type.items():
         if stype == "grid":
-            continue  # grid search is the landscape surface — no dots plotted
+            continue
         sub = df.dropna(subset=[x_param, y_param, metric])
         color = SEARCH_STYLES[stype]["color"]
         x_pts, y_pts, z_pts = [], [], []
-
         for _, row in sub.iterrows():
             col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
             if col_i is None or row_i is None:
@@ -622,24 +519,21 @@ def plot_comparison_surface_static(
             if np.isnan(z_val):
                 continue
             x_pts.append(col_i)
+            # FIX: use raw row_i, no flip — consistent with the surface
             y_pts.append(row_i)
             z_pts.append(z_val + z_offset * 0.15)
-
         if not x_pts:
             continue
-
         if stype == "random":
-            ax.scatter(x_pts, y_pts, z_pts,
-                       facecolors="none", edgecolors=color,
+            ax.scatter(x_pts, y_pts, z_pts, facecolors="none", edgecolors=color,
                        s=22, linewidths=1.1, alpha=0.5)
         elif stype == "bayesian":
-            ax.scatter(x_pts, y_pts, z_pts,
-                       color=color, s=12, alpha=0.55)
-        # grid search is the landscape surface — no dots plotted
+            ax.scatter(x_pts, y_pts, z_pts, color=color, s=12, alpha=0.55)
 
-    ax.set_xticks(range(len(x_labels)))
+    ax.set_xticks(range(n_cols))
     ax.set_xticklabels([str(v) for v in x_labels], rotation=35, ha="right", fontsize=8)
-    ax.set_yticks(range(len(y_labels)))
+    ax.set_yticks(range(n_rows))
+    # FIX: y_labels are in the same order as the pivot rows (no reversal needed)
     ax.set_yticklabels([str(v) for v in y_labels], fontsize=8)
     ax.set_xlabel(x_param)
     ax.set_ylabel(y_param)
@@ -657,10 +551,6 @@ def plot_comparison_surface_static(
     print(f"    Saved static 3D surface → {output_path}")
 
 
-# ---------------------------------------------------------------------------
-# Interactive Plotly 3D surface — best markers for overall, random, Bayesian
-# ---------------------------------------------------------------------------
-
 def plot_comparison_surface_plotly(
     combined: pd.DataFrame,
     per_type: Dict[str, pd.DataFrame],
@@ -672,14 +562,14 @@ def plot_comparison_surface_plotly(
 ) -> None:
     pivot = build_pivot(combined, x_param, y_param, metric)
     Z = pivot.values.astype(float)
+    n_rows, n_cols = Z.shape
     x_labels = [str(v) for v in pivot.columns]
     y_labels = [str(v) for v in pivot.index]
-    x_vals = np.arange(len(x_labels))
-    y_vals = np.arange(len(y_labels))
+    x_vals = np.arange(n_cols)
+    y_vals = np.arange(n_rows)
 
     coverage = compute_coverage(per_type, pivot, x_param, y_param)
 
-    # Fill NaN for surface rendering
     Z_surf = Z.copy()
     mask = np.isnan(Z_surf)
     if mask.any() and not mask.all():
@@ -695,19 +585,15 @@ def plot_comparison_surface_plotly(
             pass
 
     traces = []
-
-    # Base surface
     traces.append(go.Surface(
         x=x_vals, y=y_vals, z=Z_surf,
-        colorscale="Viridis",
-        opacity=0.78,
+        colorscale="Viridis", opacity=0.78,
         colorbar=dict(title=dict(text=metric, side="right")),
         hovertemplate=(
             f"{x_param}: %{{x}}<br>{y_param}: %{{y}}<br>"
             f"{metric}: %{{z:.4f}}<extra></extra>"
         ),
-        name="Landscape (combined)",
-        showlegend=True,
+        name="Landscape (combined)", showlegend=True,
     ))
 
     z_orig = pivot.values.astype(float)
@@ -715,12 +601,13 @@ def plot_comparison_surface_plotly(
                if not np.all(np.isnan(z_orig)) else 0.0)
     z_offset = z_range * 0.12
 
-    # ── Overall peak ──
+    overall_peak_cell: Optional[Tuple[int, int]] = None
     if not np.all(np.isnan(z_orig)):
         pr, pc = np.unravel_index(np.nanargmax(z_orig), z_orig.shape)
         peak_z = z_orig[pr, pc]
+        overall_peak_cell = (pc, pr)
         traces.append(go.Scatter3d(
-            x=[pc], y=[pr], z=[peak_z + z_offset * 1.6],
+            x=[x_vals[pc]], y=[y_vals[pr]], z=[peak_z + z_offset * 1.6],
             mode="markers+text",
             marker=dict(size=14, color=_BEST_OVERALL_COLOR, symbol="diamond"),
             text=[f"Overall Peak<br>{x_labels[pc]}/{y_labels[pr]}<br>{peak_z:.4f}"],
@@ -733,104 +620,90 @@ def plot_comparison_surface_plotly(
             ),
         ))
         traces.append(go.Scatter3d(
-            x=[pc, pc], y=[pr, pr], z=[peak_z, peak_z + z_offset * 1.6],
+            x=[x_vals[pc], x_vals[pc]], y=[y_vals[pr], y_vals[pr]],
+            z=[peak_z, peak_z + z_offset * 1.6],
             mode="lines",
             line=dict(color=_BEST_OVERALL_COLOR, width=3, dash="dash"),
             showlegend=False, hoverinfo="skip",
         ))
 
-    bests = get_best_per_search(per_type, x_param, y_param, metric)
+    # FIX: use pivot-based best
+    bests = get_best_per_search(per_type, pivot, x_param, y_param, metric)
 
-    # Overall peak cell for comparison
-    overall_peak_cell = (pc, pr) if not np.all(np.isnan(z_orig)) else None
-
-    # ── Best Random ──
     if "random" in bests:
-        br = bests["random"]
-        col_i, row_i = pivot_coords(pivot, br[x_param], br[y_param])
-        if col_i is not None and row_i is not None:
-            z_val = z_orig[row_i, col_i]
-            if not np.isnan(z_val):
-                cov_pct = coverage.get("random", 0.0) * 100
-                found_overall = (overall_peak_cell == (col_i, row_i))
-                if found_overall:
-                    # Legend-only entry — no marker needed, already shown by overall peak
-                    traces.append(go.Scatter3d(
-                        x=[], y=[], z=[],
-                        mode="markers",
-                        marker=dict(size=8, color=_BEST_RANDOM_COLOR, symbol="square"),
-                        name=f"Random ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)",
-                    ))
-                else:
-                    traces.append(go.Scatter3d(
-                        x=[col_i], y=[row_i], z=[z_val + z_offset * 1.3],
-                        mode="markers+text",
-                        marker=dict(size=11, color=_BEST_RANDOM_COLOR, symbol="square"),
-                        text=[f"Random Best<br>{z_val:.4f}"],
-                        textposition="top center",
-                        textfont=dict(size=9, color=_BEST_RANDOM_COLOR),
-                        name=f"Random best ({z_val:.4f}, cov={cov_pct:.1f}%)",
-                        hovertemplate=(
-                            f"<b>Random Best</b><br>{x_param}: {x_labels[col_i]}<br>"
-                            f"{y_param}: {y_labels[row_i]}<br>"
-                            f"{metric}: {z_val:.4f}<extra></extra>"
-                        ),
-                    ))
-                    traces.append(go.Scatter3d(
-                        x=[col_i, col_i], y=[row_i, row_i],
-                        z=[z_val, z_val + z_offset * 1.3],
-                        mode="lines",
-                        line=dict(color=_BEST_RANDOM_COLOR, width=2, dash="dot"),
-                        showlegend=False, hoverinfo="skip",
-                    ))
+        col_i, row_i, z_val = bests["random"]
+        cov_pct = coverage.get("random", 0.0) * 100
+        found_overall = (overall_peak_cell == (col_i, row_i))
+        if found_overall:
+            traces.append(go.Scatter3d(
+                x=[], y=[], z=[], mode="markers",
+                marker=dict(size=8, color=_BEST_RANDOM_COLOR, symbol="square"),
+                name=f"Random ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)",
+            ))
+        else:
+            traces.append(go.Scatter3d(
+                x=[x_vals[col_i]], y=[y_vals[row_i]], z=[z_val + z_offset * 1.3],
+                mode="markers+text",
+                marker=dict(size=11, color=_BEST_RANDOM_COLOR, symbol="square"),
+                text=[f"Random Best<br>{z_val:.4f}"],
+                textposition="top center",
+                textfont=dict(size=9, color=_BEST_RANDOM_COLOR),
+                name=f"Random best ({z_val:.4f}, cov={cov_pct:.1f}%)",
+                hovertemplate=(
+                    f"<b>Random Best</b><br>{x_param}: {x_labels[col_i]}<br>"
+                    f"{y_param}: {y_labels[row_i]}<br>"
+                    f"{metric}: {z_val:.4f}<extra></extra>"
+                ),
+            ))
+            traces.append(go.Scatter3d(
+                x=[x_vals[col_i], x_vals[col_i]],
+                y=[y_vals[row_i], y_vals[row_i]],
+                z=[z_val, z_val + z_offset * 1.3],
+                mode="lines",
+                line=dict(color=_BEST_RANDOM_COLOR, width=2, dash="dot"),
+                showlegend=False, hoverinfo="skip",
+            ))
 
-    # ── Best Bayesian ──
     if "bayesian" in bests:
-        bb = bests["bayesian"]
-        col_i, row_i = pivot_coords(pivot, bb[x_param], bb[y_param])
-        if col_i is not None and row_i is not None:
-            z_val = z_orig[row_i, col_i]
-            if not np.isnan(z_val):
-                cov_pct = coverage.get("bayesian", 0.0) * 100
-                found_overall = (overall_peak_cell == (col_i, row_i))
-                if found_overall:
-                    traces.append(go.Scatter3d(
-                        x=[], y=[], z=[],
-                        mode="markers",
-                        marker=dict(size=8, color=_BEST_BAYESIAN_COLOR, symbol="circle"),
-                        name=f"Bayesian ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)",
-                    ))
-                else:
-                    traces.append(go.Scatter3d(
-                        x=[col_i], y=[row_i], z=[z_val + z_offset * 1.3],
-                        mode="markers+text",
-                        marker=dict(size=11, color=_BEST_BAYESIAN_COLOR, symbol="circle"),
-                        text=[f"Bayesian Best<br>{z_val:.4f}"],
-                        textposition="top center",
-                        textfont=dict(size=9, color=_BEST_BAYESIAN_COLOR),
-                        name=f"Bayesian best ({z_val:.4f}, cov={cov_pct:.1f}%)",
-                        hovertemplate=(
-                            f"<b>Bayesian Best</b><br>{x_param}: {x_labels[col_i]}<br>"
-                            f"{y_param}: {y_labels[row_i]}<br>"
-                            f"{metric}: {z_val:.4f}<extra></extra>"
-                        ),
-                    ))
-                    traces.append(go.Scatter3d(
-                        x=[col_i, col_i], y=[row_i, row_i],
-                        z=[z_val, z_val + z_offset * 1.3],
-                        mode="lines",
-                        line=dict(color=_BEST_BAYESIAN_COLOR, width=2, dash="dot"),
-                        showlegend=False, hoverinfo="skip",
-                    ))
+        col_i, row_i, z_val = bests["bayesian"]
+        cov_pct = coverage.get("bayesian", 0.0) * 100
+        found_overall = (overall_peak_cell == (col_i, row_i))
+        if found_overall:
+            traces.append(go.Scatter3d(
+                x=[], y=[], z=[], mode="markers",
+                marker=dict(size=8, color=_BEST_BAYESIAN_COLOR, symbol="circle"),
+                name=f"Bayesian ✓ found overall best ({z_val:.4f}, cov={cov_pct:.1f}%)",
+            ))
+        else:
+            traces.append(go.Scatter3d(
+                x=[x_vals[col_i]], y=[y_vals[row_i]], z=[z_val + z_offset * 1.3],
+                mode="markers+text",
+                marker=dict(size=11, color=_BEST_BAYESIAN_COLOR, symbol="circle"),
+                text=[f"Bayesian Best<br>{z_val:.4f}"],
+                textposition="top center",
+                textfont=dict(size=9, color=_BEST_BAYESIAN_COLOR),
+                name=f"Bayesian best ({z_val:.4f}, cov={cov_pct:.1f}%)",
+                hovertemplate=(
+                    f"<b>Bayesian Best</b><br>{x_param}: {x_labels[col_i]}<br>"
+                    f"{y_param}: {y_labels[row_i]}<br>"
+                    f"{metric}: {z_val:.4f}<extra></extra>"
+                ),
+            ))
+            traces.append(go.Scatter3d(
+                x=[x_vals[col_i], x_vals[col_i]],
+                y=[y_vals[row_i], y_vals[row_i]],
+                z=[z_val, z_val + z_offset * 1.3],
+                mode="lines",
+                line=dict(color=_BEST_BAYESIAN_COLOR, width=2, dash="dot"),
+                showlegend=False, hoverinfo="skip",
+            ))
 
-    # ── All sampled points (random + Bayesian only; grid IS the surface) ──
     for stype, df in per_type.items():
         if stype == "grid":
-            continue  # grid search is the landscape — no dots plotted
+            continue
         sub = df.dropna(subset=[x_param, y_param, metric])
         color = SEARCH_STYLES[stype]["plotly_color"]
         cov_pct = coverage.get(stype, 0.0) * 100
-
         x_pts, y_pts, z_pts, hover_texts = [], [], [], []
         for _, row in sub.iterrows():
             col_i, row_i = pivot_coords(pivot, row[x_param], row[y_param])
@@ -839,35 +712,29 @@ def plot_comparison_surface_plotly(
             z_val = z_orig[row_i, col_i]
             if np.isnan(z_val):
                 continue
-            x_pts.append(col_i)
-            y_pts.append(row_i)
+            x_pts.append(x_vals[col_i])
+            y_pts.append(y_vals[row_i])
             z_pts.append(z_val + z_offset * 0.12)
             hover_texts.append(
                 f"{x_param}: {row[x_param]}<br>"
                 f"{y_param}: {row[y_param]}<br>"
                 f"{metric}: {row[metric]:.4f}"
             )
-
         if not x_pts:
             continue
-
         if stype == "random":
-            marker_kwargs = dict(size=4, color="rgba(0,0,0,0)",
-                                 symbol="circle",
+            marker_kwargs = dict(size=4, color="rgba(0,0,0,0)", symbol="circle",
                                  line=dict(color=color, width=1.5))
         elif stype == "bayesian":
             marker_kwargs = dict(size=4, color=color, symbol="circle")
         else:
             marker_kwargs = dict(size=3, color=color, symbol="square", opacity=0.4)
-
         traces.append(go.Scatter3d(
-            x=x_pts, y=y_pts, z=z_pts,
-            mode="markers",
+            x=x_pts, y=y_pts, z=z_pts, mode="markers",
             marker=marker_kwargs,
             name=f"{SEARCH_STYLES[stype]['label']} (cov={cov_pct:.1f}%)",
             hovertemplate="%{text}<extra></extra>",
-            text=hover_texts,
-            opacity=0.6,
+            text=hover_texts, opacity=0.6,
         ))
 
     if title is None:
@@ -887,8 +754,7 @@ def plot_comparison_surface_plotly(
             aspectmode="auto",
         ),
         legend=dict(x=0.01, y=0.99, bgcolor="rgba(255,255,255,0.85)",
-                    bordercolor="lightgrey", borderwidth=1,
-                    font=dict(size=10)),
+                    bordercolor="lightgrey", borderwidth=1, font=dict(size=10)),
         margin=dict(l=0, r=0, b=0, t=55),
     )
 
@@ -898,17 +764,12 @@ def plot_comparison_surface_plotly(
     print(f"    Saved interactive 3D surface → {output_path}")
 
 
-# ---------------------------------------------------------------------------
-# Score distribution comparison
-# ---------------------------------------------------------------------------
-
 def plot_comparison_distribution(
     per_type: Dict[str, pd.DataFrame],
     metric: str,
     output_path: Path,
 ) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
-
     data_by_type, labels, colors = [], [], []
     for stype, df in per_type.items():
         sub = df[metric].dropna()
@@ -923,7 +784,6 @@ def plot_comparison_distribution(
 
     parts = ax.violinplot(data_by_type, positions=range(len(data_by_type)),
                           showmedians=True, showextrema=True)
-
     for pc, color in zip(parts["bodies"], colors):
         pc.set_facecolor(color)
         pc.set_alpha(0.65)
@@ -947,8 +807,7 @@ def plot_comparison_distribution(
     for i, (vals, stype) in enumerate(zip(data_by_type, per_type.keys())):
         ax.text(i, ylim[0] - span * 0.07,
                 f"n={len(vals)}\nbest={vals.max():.4f}",
-                ha="center", fontsize=8,
-                color=SEARCH_STYLES[stype]["color"])
+                ha="center", fontsize=8, color=SEARCH_STYLES[stype]["color"])
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -957,20 +816,12 @@ def plot_comparison_distribution(
     print(f"    Saved distribution plot → {output_path}")
 
 
-# ---------------------------------------------------------------------------
-# Main orchestration
-# ---------------------------------------------------------------------------
-
 def run(args) -> None:
     print("=" * 70)
     print("  ExaTune Search Comparison Visualizer")
     print("=" * 70)
 
-    paths = {
-        "grid":     args.grid,
-        "random":   args.random,
-        "bayesian": args.bayesian,
-    }
+    paths = {"grid": args.grid, "random": args.random, "bayesian": args.bayesian}
     active = {k: v for k, v in paths.items() if v is not None}
     if not active:
         print("ERROR: Provide at least one of --grid, --random, or --bayesian.")
@@ -1006,7 +857,6 @@ def run(args) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"  Output dir: {args.output_dir}")
 
-    # ── Default params for --default mode ──
     DEFAULT_PARAMS = ["n_estimators", "learning_rate", "max_depth"]
     DEFAULT_PAIRS  = [
         ("n_estimators", "learning_rate"),
@@ -1014,9 +864,7 @@ def run(args) -> None:
         ("learning_rate", "max_depth"),
     ]
 
-    # ── Resolve parameter pairs ──
     if args.default:
-        # Only keep pairs where both params actually exist in the data
         pairs = [(x, y) for x, y in DEFAULT_PAIRS
                  if x in combined.columns and y in combined.columns]
         missing_params = [p for p in DEFAULT_PARAMS if p not in combined.columns]
@@ -1031,15 +879,11 @@ def run(args) -> None:
         print(f"  Plotting all {len(pairs)} parameter pairs (--all-pairs)")
     else:
         if len(param_names) < 2:
-            print("ERROR: Need at least 2 hyperparameters. "
-                  "Use --x-param and --y-param, --all-pairs, or --default.")
+            print("ERROR: Need at least 2 hyperparameters.")
             sys.exit(1)
         pairs = [(param_names[0], param_names[1])]
         print(f"  Defaulting to first two params: {param_names[0]} × {param_names[1]}")
 
-    # ── Resolve metrics to plot ──
-    # In default mode: all score/metric columns present in data.
-    # Otherwise: just args.metric (single metric as before).
     non_metric_cols = {
         "job_id", "config_hash", "timestamp", "success",
         "std_score", "mean_train_score", "fit_time_mean", "score_time_mean",
@@ -1047,14 +891,11 @@ def run(args) -> None:
         "emissions_kg_co2", "energy_consumed_kwh",
     }
     if args.default or args.all_metrics:
-        # Collect mean_score plus any *_mean columns that look like metric aggregates
         metrics = ["mean_score"] + sorted([
             c for c in combined.columns
-            if c.endswith("_mean")
-            and c not in non_metric_cols
+            if c.endswith("_mean") and c not in non_metric_cols
             and combined[c].notna().any()
         ])
-        # Deduplicate while preserving order
         seen_m: set = set()
         metrics = [m for m in metrics if not (m in seen_m or seen_m.add(m))]
         print(f"  Metrics ({len(metrics)}): {', '.join(metrics)}")
@@ -1072,7 +913,6 @@ def run(args) -> None:
 
         metric_dir = output_dir / metric if len(metrics) > 1 else output_dir
         metric_dir.mkdir(parents=True, exist_ok=True)
-
         print(f"  ══ Metric: {metric} ══")
 
         for x_param, y_param in pairs:
@@ -1120,7 +960,6 @@ def run(args) -> None:
             except Exception as e:
                 print(f"    WARNING: distribution plot failed: {e}")
 
-    # ── Summary (using primary metric) ──
     primary_metric = metrics[0]
     print(f"\n  ── Summary (metric: {primary_metric}) ──")
     print(f"  {'Search':<18} {'N':>5} {'Best':>8} {'Mean':>8} {'Std':>8} {'Coverage':>10}")
@@ -1149,55 +988,11 @@ def run(args) -> None:
     print("=" * 70)
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
-
 def main():
     parser = argparse.ArgumentParser(
         description="ExaTune: compare grid / random / Bayesian search on shared landscape plots",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Default mode: n_estimators/learning_rate/max_depth pairs, all metrics
-  python visualize_search_comparison.py \\
-      --grid     ./results/grid/results.parquet \\
-      --random   ./results/random/results.parquet \\
-      --bayesian ./results/bayesian/results.parquet \\
-      --default --output-dir ./comparison
-
-  # All metrics, specific param pair
-  python visualize_search_comparison.py \\
-      --random   ./results/random/results.parquet \\
-      --bayesian ./results/bayesian/results.parquet \\
-      --config   iris_classification.yaml \\
-      --all-metrics --x-param n_estimators --y-param max_depth
-
-  # Single metric, all pairs
-  python visualize_search_comparison.py \\
-      --grid     ./results/grid/results.parquet \\
-      --random   ./results/random/results.parquet \\
-      --bayesian ./results/bayesian/results.parquet \\
-      --config   iris_classification.yaml \\
-      --metric   f1_macro_mean --all-pairs --no-plotly
-
-Output structure with multiple metrics (--default or --all-metrics):
-  comparison_plots/
-    mean_score/
-      heatmap_n_estimators_x_max_depth.png
-      surface_n_estimators_x_max_depth.html  ...
-    f1_macro_mean/
-      heatmap_n_estimators_x_max_depth.png  ...
-    score_distribution.png  (per metric)
-
-Plot types produced (per param pair × metric):
-  heatmap_<x>_x_<y>.png   — 2D heatmap; dotted=random best, solid=Bayesian best
-  surface_<x>_x_<y>.png   — static 3D surface with best markers + drop lines
-  surface_<x>_x_<y>.html  — interactive Plotly surface with best markers
-  score_distribution.png  — violin plot
-        """,
     )
-
     search_group = parser.add_argument_group("Search result inputs (provide at least one)")
     search_group.add_argument("--grid",     type=Path, default=None, metavar="PARQUET")
     search_group.add_argument("--random",   type=Path, default=None, metavar="PARQUET")
@@ -1206,27 +1001,14 @@ Plot types produced (per param pair × metric):
     parser.add_argument("--config", "-c", type=Path, default=None)
 
     pair_group = parser.add_argument_group("Parameter pair selection")
-    pair_group.add_argument("--x-param",    type=str, default=None)
-    pair_group.add_argument("--y-param",    type=str, default=None)
-    pair_group.add_argument("--all-pairs",  action="store_true")
-    pair_group.add_argument(
-        "--default", action="store_true",
-        help="Default mode: plot n_estimators×learning_rate, n_estimators×max_depth, "
-             "learning_rate×max_depth across ALL available metrics (overrides "
-             "--x-param, --y-param, --all-pairs, and --metric)",
-    )
+    pair_group.add_argument("--x-param",   type=str, default=None)
+    pair_group.add_argument("--y-param",   type=str, default=None)
+    pair_group.add_argument("--all-pairs", action="store_true")
+    pair_group.add_argument("--default",   action="store_true")
 
-    parser.add_argument("--metric", "-m", type=str, default="mean_score",
-                        help="Metric column to visualize (default: mean_score). "
-                             "Ignored when --default or --all-metrics is set.")
-    parser.add_argument(
-        "--all-metrics", action="store_true",
-        help="Generate plots for every metric column found in the data "
-             "(mean_score + all *_mean columns). Output is grouped into "
-             "per-metric subdirectories.",
-    )
-    parser.add_argument("--output-dir", "-o", type=str, default="./comparison_plots")
-
+    parser.add_argument("--metric",      "-m", type=str, default="mean_score")
+    parser.add_argument("--all-metrics", action="store_true")
+    parser.add_argument("--output-dir",  "-o", type=str, default="./comparison_plots")
     parser.add_argument("--no-heatmap",      action="store_true")
     parser.add_argument("--no-surface",      action="store_true")
     parser.add_argument("--no-plotly",       action="store_true")
