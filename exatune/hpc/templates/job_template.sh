@@ -9,8 +9,8 @@
 #SBATCH --nodes={{ nodes }}
 {% if account %}#SBATCH --account={{ account }}{% endif %}
 {% if qos %}#SBATCH --qos={{ qos }}{% endif %}
-{% if email %}#SBATCH --mail-user={{ email }}{% endif %}
-{% if email_type %}#SBATCH --mail-type={{ email_type }}{% endif %}
+# {% if email %}#SBATCH --mail-user={{ email }}{% endif %}
+# {% if email_type %}#SBATCH --mail-type={{ email_type }}{% endif %}
 {% for key, value in additional_directives.items() %}
 #SBATCH --{{ key }}={{ value }}
 {% endfor %}

@@ -13,22 +13,15 @@ import pandas as pd
 
 # Known metadata columns (same as visualization)
 _METADATA_COLUMNS = {
-    "job_id",
-    "config_hash",
-    "timestamp",
-    "success",
-    "mean_score",
-    "std_score",
-    "mean_train_score",
-    "std_train_score",
-    "fit_time_mean",
-    "fit_time_std",
-    "score_time_mean",
-    "score_time_std",
-    "rank",
-    "best_score",
-    "error_message",
-    "error_type",
+    "job_id", "config_hash", "timestamp", "success",
+    "mean_score", "std_score", "mean_train_score", "std_train_score",
+    "fit_time_mean", "fit_time_std", "score_time_mean", "score_time_std",
+    "rank", "best_score", "error_message", "error_type",
+    # co2 tracking columns
+    "emissions_kg_co2", "energy_consumed_kwh",
+    "kg_co2", "energy_kwh",
+    # row index
+    "Unnamed: 0",
 }
 
 _METRIC_SUFFIXES = ("_mean", "_std", "_min", "_max")
@@ -186,31 +179,18 @@ def build_adjacency_structure(
     df: pd.DataFrame,
     param_columns: List[str],
 ) -> Dict[int, List[int]]:
-    """Build a complete adjacency structure for the hyperparameter grid.
-
-    Two configurations are neighbors if they differ in exactly one
-    parameter by one grid step (adjacent values in the sorted order).
-
-    Args:
-        df: Results DataFrame (indexed by integer position).
-        param_columns: Hyperparameter column names.
-
-    Returns:
-        Dict mapping DataFrame index to list of neighbor indices.
-    """
     df = df.reset_index(drop=True)
     value_orders = get_param_value_orders(df, param_columns)
 
-    # Build value-to-position mapping for each param
     val_to_pos = {}
     for param in param_columns:
         val_to_pos[param] = {v: i for i, v in enumerate(value_orders[param])}
 
-    # Build index from parameter values to row indices
-    config_index = {}
+    # FIX: store ALL row indices per config key, not just the last
+    config_index: Dict[tuple, List[int]] = {}
     for idx in range(len(df)):
         key = tuple(df[param].iloc[idx] for param in param_columns)
-        config_index[key] = idx
+        config_index.setdefault(key, []).append(idx)
 
     adjacency = {idx: [] for idx in range(len(df))}
 
@@ -225,7 +205,6 @@ def build_adjacency_structure(
 
             order = value_orders[param]
 
-            # Check neighbor at pos-1 and pos+1
             for delta in [-1, 1]:
                 neighbor_pos = current_pos + delta
                 if 0 <= neighbor_pos < len(order):
@@ -233,14 +212,12 @@ def build_adjacency_structure(
                     neighbor_key[p_idx] = order[neighbor_pos]
                     neighbor_key = tuple(neighbor_key)
 
-                    if neighbor_key in config_index:
-                        neighbor_idx = config_index[neighbor_key]
-                        if neighbor_idx not in adjacency[idx]:
+                    # FIX: iterate over all rows with that config
+                    for neighbor_idx in config_index.get(neighbor_key, []):
+                        if neighbor_idx != idx and neighbor_idx not in adjacency[idx]:
                             adjacency[idx].append(neighbor_idx)
 
     return adjacency
-
-
 def compute_grid_distance(
     df: pd.DataFrame,
     idx1: int,

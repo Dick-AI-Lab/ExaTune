@@ -13,7 +13,8 @@ import time
 import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
+from codecarbon import OfflineEmissionsTracker
+from codecarbon import EmissionsTracker
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import cross_validate
@@ -61,9 +62,24 @@ def load_dataset(config: ExaTuneConfig) -> tuple:
         # Load from CSV
         if dataset_path.suffix == ".csv":
             df = pd.read_csv(dataset_path)
+            y = df[config.dataset.target_column].values
+            X = df.drop(columns=[config.dataset.target_column]).values
+            return X, y
         # Load from Parquet
         elif dataset_path.suffix == ".parquet":
             df = pd.read_parquet(dataset_path)
+            y = df[config.dataset.target_column].values
+            X = df.drop(columns=[config.dataset.target_column]).values
+            return X, y
+        # Load from NPZ (e.g. MNIST)
+        elif dataset_path.suffix == ".npz":
+            npz = np.load(dataset_path, allow_pickle=False)
+            X = npz["x_train"].reshape(-1, 784).astype("float32") / 255.0
+            y = npz["y_train"]
+    # Flatten image data if needed (e.g., 28x28 -> 784)
+            if X.ndim > 2:
+                X = X.reshape(X.shape[0], -1)
+            return X, y
         else:
             raise ValueError(f"Unsupported file format: {dataset_path.suffix}")
 
@@ -75,6 +91,11 @@ def load_dataset(config: ExaTuneConfig) -> tuple:
                 )
             y = df[config.dataset.target_column].values
             X = df.drop(columns=[config.dataset.target_column]).values
+
+            # Encode string labels to integers (required for XGBoost)
+            if y.dtype == object:
+                from sklearn.preprocessing import LabelEncoder
+                y = LabelEncoder().fit_transform(y)
         else:
             raise ValueError("target_column must be specified for custom datasets")
 
@@ -169,6 +190,14 @@ def perform_cross_validation(
     if model_wrapper.model is None:
         model_wrapper.model = model_wrapper._create_model()
 
+    tracker = OfflineEmissionsTracker(
+    project_name=config.experiment.name,
+    measure_power_secs=1,
+    save_to_file=False,
+    log_level="error",
+    country_iso_code="CAN",
+    )
+    tracker.start()
     # Perform cross-validation
     cv_results = cross_validate(
         model_wrapper.model,
@@ -179,7 +208,10 @@ def perform_cross_validation(
         return_train_score=True,
         n_jobs=1,  # Use single job per SLURM task
     )
+    emissions = tracker.stop() 
 
+    cv_results["emissions_kg_co2"] = emissions
+    cv_results["energy_consumed_kwh"] = tracker.final_emissions_data.energy_consumed
     return cv_results
 
 
@@ -223,7 +255,8 @@ def generate_result(
         result["cv_scores"] = cv_results[primary_metric_key].tolist()
         result["mean_score"] = float(np.mean(cv_results[primary_metric_key]))
         result["std_score"] = float(np.std(cv_results[primary_metric_key]))
-
+        result["emissions_kg_co2"] = cv_results.get("emissions_kg_co2")
+        result["energy_consumed_kwh"] = cv_results.get("energy_consumed_kwh")
         # Extract training scores
         train_metric_key = f"train_{config.evaluation.scoring}"
         if train_metric_key in cv_results:
@@ -285,6 +318,8 @@ def save_result(result: Dict[str, Any], output_dir: Path) -> None:
             "mean_train_score": result.get("mean_train_score"),
             "fit_time_mean": result.get("fit_time_mean"),
             "score_time_mean": result.get("score_time_mean"),
+            "kg_co2": result.get("emissions_kg_co2"),
+            "energy_kwh": result.get("energy_consumed_kwh"),
         }
 
         # Add hyperparameters as columns

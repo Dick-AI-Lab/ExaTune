@@ -1,0 +1,78 @@
+# ExaTune Configuration: MNIST SVM
+# Dataset: MNIST Handwritten Digits
+# Task: Multi-class classification
+# Model: Support Vector Machine
+
+experiment:
+  name: "mnist_svm_benchmark"
+  output_dir: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/mnist2/results"
+  config: "/scratch/klons06/Exatune/ExaTune/examples/results/benchmarks/mnist/results/config.yaml"
+  description: "SVM hyperparameter landscape on MNIST dataset varying C and gamma"
+  tags:
+    - "benchmark"
+    - "classification"
+    - "multi-class"
+    - "mnist"
+    - "sklearn"
+    - "svm"
+  random_seed: 42
+  save_models: false
+  checkpoint_interval: 100
+
+model:
+  type: "sklearn"
+  class: "sklearn.svm.SVC"
+  task: "classification"
+  fixed_params:
+    kernel: "rbf"
+
+hyperparameters:
+  C:
+    type: "categorical"
+    values: [0.00001, 0.0001, 0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.15,
+             0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.5,
+             2, 3, 4, 5, 6, 7, 8, 9, 10, 15,
+             20, 30, 40, 50, 60, 70, 80, 90, 100, 200]   # 40
+  gamma:
+    type: "categorical"
+    values: [0.00001, 0.0001, 0.001, 0.005, 0.01,
+             0.025, 0.05, 0.1, 0.5, 1.0,
+             2.0, 5.0, 10.0, 50.0, 100.0,
+             0.0003, 0.003, 0.008, 0.015, 0.075,
+             0.15, 0.25, 0.75, 20.0, 200.0]              # 25
+dataset:
+  name: "mnist"
+  path: "C:/Users/katel/OneDrive/Desktop/ExaTune/examples/data/neurips/mnist.npz"
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+  target_column: "y"
+
+evaluation:
+  cv_folds: 5
+  cv_strategy: "stratified"
+  scoring: "accuracy"
+  additional_metrics:
+    - "f1_macro"
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+  n_jobs: 1
+
+slurm:
+  time: "12:00:00"
+  memory: "8G"
+  cpus_per_task: 2
+  nodes: 1
+  email_type: "FAIL"
+  python_environment: "/scratch/klons06/Exatune/ENV"
+  modules:
+    - "gcc/13.3"
+    - "python/3.10.13"
+    - "scipy-stack/2023b"
+    - "arrow/14.0.1"
+
+storage:
+  backend: "parquet"
+  compress: true

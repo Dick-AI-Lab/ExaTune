@@ -23,18 +23,78 @@ CLASSIFICATION_BENCHMARKS = {
         "description": "Digits dataset (1797 samples, 10 classes) - SVM",
         "grid_size_estimate": 480,  # 5 * 4 * 6 * 4
     },
-    "wine": {
-        "config": "configs/benchmarks/wine_classification.yaml",
-        "description": "Wine dataset (178 samples, 3 classes) - Gradient Boosting",
-        "grid_size_estimate": 720,  # 5 * 6 * 6 * 4 * 4 * 5
-    },
+
     "breast_cancer": {
         "config": "configs/benchmarks/breast_cancer_classification.yaml",
         "description": "Breast Cancer dataset (569 samples, 2 classes) - XGBoost",
         "grid_size_estimate": 15120,  # 5 * 6 * 7 * 5 * 6 * 6 * 5 * 5 * 5
     },
-}
+"pregnancy_outcome": {
+        "config": "configs/born_air/pregnancy_outcome_calssification.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 5184,
+    },
 
+    "pregnancy_outcome_LS": {
+        "config": "configs/born_air/pregnancy_outcome_calssification_large_scale.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 4680,
+},
+    "gestational_diabetes": {
+        "config": "configs/born_air/gestational_diabetes_classification_large_scale.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 4680,
+},
+    "maternal_risk": {
+        
+        "config": "configs/born_air/maternal_risk_classification_ls.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 4680,
+},
+    "titanic": {
+        
+        "config": "configs/neurips/titanic_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 505440,
+},
+    "diabetes": {
+        
+        "config": "configs/neurips/diabetes_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+        "grid_size_estimate": 8316,
+},    
+"housing": {
+        
+        "config": "configs/neurips/housing_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 8316,
+
+},
+"wine": {
+        "config": "configs/neurips/wine_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 32000,
+
+},
+"adult": {
+        "config": "configs/neurips/adult_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 900,
+
+},
+"higgs": {
+        "config": "configs/neurips/higgs_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 900,
+
+},
+"mn": {
+        "config": "configs/neurips/mnist_classification.yaml",
+        "description": "My custom dataset - XGB from born air",
+    "grid_size_estimate": 900,
+
+},
+}
 
 def run_benchmark(benchmark_name: str, submit: bool = False, dry_run: bool = False):
     """
