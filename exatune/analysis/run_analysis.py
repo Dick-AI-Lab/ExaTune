@@ -61,11 +61,11 @@ def infer_metrics(parquet_path: Path) -> list:
             continue
         if any(col.endswith(s) for s in _SKIP_SUFFIXES):
             continue
-        if col == "mean_score" or col.endswith("_mean"):
+        # handle both underscore and dot notation
+        if col == "mean_score" or col.endswith("_mean") or col.endswith(".mean"):
             metrics.append(col)
 
     return metrics if metrics else ["mean_score"]
-
 
 def get_exp_name(parquet_path: Path) -> str:
     parts = parquet_path.parts

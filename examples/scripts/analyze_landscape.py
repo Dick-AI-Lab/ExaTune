@@ -6,7 +6,7 @@ landscape analysis metric supported by ExaTune. It can be run without
 a SLURM cluster or any actual experiment data.
 
 Usage:
-    python examples/scripts/analyze_landscape.py [--output-dir OUTPUT_DIR]
+    python examples/scripts/analyze_landscape.py [--output-dir OUTPUT_DIR] [--results RESULTS_CSV]
 """
 
 import argparse
@@ -66,13 +66,34 @@ def main():
         default="./analysis_demo",
         help="Directory for output report",
     )
+    parser.add_argument(
+        "--results",
+        type=str,
+        default=None,
+        help="Path to a results CSV file. If not provided, synthetic data will be used.",
+    )
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
 
-    print("Creating synthetic results...")
-    results = create_synthetic_results()
-    print(f"  Generated {len(results)} configurations\n")
+    if args.results:
+        print(f"Loading results from: {args.results}")
+        path = Path(args.results)
+        if path.suffix == ".parquet":
+            results = pd.read_parquet(path)
+        else:
+            results = pd.read_csv(path)
+
+        # Drop array-valued columns that break ExaTune's analysis
+        results = results.drop(columns=["cv_scores", "train_scores"], errors="ignore")
+
+        # Flatten hyperparameter column names (remove "hyperparameters." prefix)
+        results.columns = [
+            col.replace("hyperparameters.", "") for col in results.columns
+        ]
+
+        print(results.columns.tolist())  # sanity check, can remove later
+        print(f"  Loaded {len(results)} configurations\n")
 
     # --- Individual Analysis Functions ---
     from exatune.analysis import (
@@ -152,7 +173,6 @@ def main():
     else:
         print(f"\n  No significant interactions detected.")
 
-    # --- Full Summary ---
     print(f"\n{'=' * 60}")
     print("FULL EXPERIMENT SUMMARY")
     print("=" * 60)
@@ -160,7 +180,6 @@ def main():
     full_summary = compute_experiment_summary(results, direction="maximize")
     print(format_summary_text(full_summary))
 
-    # --- Generate Report ---
     print(f"\nGenerating full report to: {output_dir}/")
     report_path = generate_report(
         results,
