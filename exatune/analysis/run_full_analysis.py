@@ -63,14 +63,6 @@ def load_and_clean(parquet_path: Path) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def resolve_metrics(df: pd.DataFrame, config_path: Path | None, explicit_metric: str | None) -> list[str]:
-    """
-    Return the ordered list of metric column names to analyse.
-
-    Priority:
-      1. --metric flag  (single metric, bypasses YAML)
-      2. YAML evaluation section  →  scoring + additional_metrics
-      3. Auto-detect from column names
-    """
     if explicit_metric:
         if explicit_metric not in df.columns:
             raise ValueError(
@@ -84,19 +76,16 @@ def resolve_metrics(df: pd.DataFrame, config_path: Path | None, explicit_metric:
             cfg = yaml.safe_load(f)
 
         eval_cfg = cfg.get("evaluation", {})
-        primary  = eval_cfg.get("scoring", "accuracy")    # e.g. "accuracy"
-        extras   = eval_cfg.get("additional_metrics", []) # e.g. ["f1_macro", ...]
+        primary  = eval_cfg.get("scoring", "accuracy")
+        extras   = eval_cfg.get("additional_metrics", [])
 
-        # After ExaTune's column-cleaning:
-        #   primary scorer  → "mean_score"
-        #   additional_metrics entry "f1_macro" → "f1_macro_mean"
         metrics: list[str] = []
 
         def try_add(yaml_name: str) -> None:
             candidates = [
-                yaml_name,              # exact match (unlikely after cleaning)
-                f"{yaml_name}_mean",    # additional_metrics pattern
-                "mean_score",           # primary scorer fallback
+                yaml_name,
+                f"{yaml_name}_mean",
+                "mean_score",
             ]
             for c in candidates:
                 if c in df.columns and c not in metrics:
@@ -111,18 +100,25 @@ def resolve_metrics(df: pd.DataFrame, config_path: Path | None, explicit_metric:
         if metrics:
             return metrics
 
-    # Last resort: auto-detect
-    for candidate in ("f1_macro_mean", "f1_macro", "mean_score"):
-        if candidate in df.columns:
-            print(f"  Auto-selected metric: {candidate}")
-            return [candidate]
+    # Auto-detect: find all _mean cols, excluding noise columns
+    _NON_METRIC_COLS = {
+        "fit_time_mean", "score_time_mean", "mean_train_score",
+    }
+    auto = [
+        c for c in df.columns
+        if c.endswith("_mean") and c not in _NON_METRIC_COLS
+    ]
+    if not auto and "mean_score" in df.columns:
+        auto = ["mean_score"]
+
+    if auto:
+        print(f"  Auto-selected metrics: {auto}")
+        return auto
 
     raise ValueError(
         "Could not resolve any metric columns. "
         "Pass --config or --metric explicitly."
     )
-
-
 # ---------------------------------------------------------------------------
 # Tiny helpers
 # ---------------------------------------------------------------------------

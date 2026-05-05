@@ -45,6 +45,12 @@ def compute_autocorrelation(
     """
     filtered, metric_col, param_columns = validate_and_filter(df, metric, param_columns)
     filtered = filtered.reset_index(drop=True)
+    # DEBUG
+    print(f"DEBUG param_columns: {param_columns}")
+    print(f"DEBUG filtered shape: {filtered.shape}")
+    adjacency = build_adjacency_structure(filtered, param_columns)
+    total_edges = sum(len(v) for v in adjacency.values())
+    print(f"DEBUG total adjacency edges: {total_edges}")
 
     values = filtered[metric_col].values.astype(float)
     n = len(values)
