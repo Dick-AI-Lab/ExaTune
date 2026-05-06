@@ -244,22 +244,15 @@ pytest
 ## Citation
 
 ```bibtex
-@software{exatune2025,
+@software{exatune2026,
   title = {ExaTune: Exhaustive Hyperparameter Landscape Exploration via HPC},
-  author = {Lonsway, Katie and Dick, Kevin and Howley, Heather},
-  year = {2025},
+  author = {Dick, Kevin and Lonsway, Katie},
+  year = {2026},
   organization = {BORN Ontario},
-  url = {https://github.com/BORN-Ontario/exatune}
+  url = {https://github.com/Dick-AI-Lab/ExaTune}
 }
 ```
 
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- Developed at BORN Ontario as part of the Fall 2025 Internship Program
-- Intern: Katie Lonsway
-- Supervisors: Dr. Kevin Dick, Heather Howley
-- HPC resources provided by Digital Research Alliance of Canada (DRAC)
